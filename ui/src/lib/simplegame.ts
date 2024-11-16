@@ -2,17 +2,18 @@
 
 import {setup} from '../game';
 
-let ticksPerSecond = 20;
+let ticksPerSecond = 30;
 let canvas: HTMLCanvasElement;
 let lastGameLoopTime : number;
 
-let gameObjects : GameObject[] = [];
+let gameObjects : Set<GameObject> = new Set();
 let players : Player[] = [];
-let enemies : Enemy[] = [];
-let projectiles : Projectile[] = [];
-let items : Item[] = [];
+let enemies : Set<Enemy> = new Set();
+let projectiles : Set<Projectile> = new Set();
+let items : Set<Item> = new Set();
 
-let tickWork : ((delta_t:number) => void)[] = [];
+const tickWork : ((delta_t:number) => void)[] = [];
+const periodicWork : PeriodicWork[] = [];
 
 const keyMap = new Map<string, boolean>();
 const keyMapTimes = new Map<string, number>();
@@ -22,14 +23,44 @@ let boardHeight = 10000;
 let windowWidth = 1000;
 let windowHeight = 1000;
 
+let gameLoopTimeout : number = -1;
+
+class PeriodicWork {
+    period : number;
+    work : ()=>void;
+    timeRemaining : number;
+
+    constructor(period : number, work: ()=>void) {
+        this.period = period;
+        this.timeRemaining = period;
+        this.work = work;
+    }
+
+    timeElapsed(delta_t : number) {
+        this.timeRemaining -= delta_t;
+        if(this.timeRemaining <= 0) {
+            this.work();
+            this.timeRemaining = this.period;
+        }
+    }
+}
+
 export class GameObjectClass {
     name : string;
     image : HTMLImageElement;
+    defaultSpeed : number = 100;
 
     constructor(name : string, image_file : string) {
         this.name = name;
         this.image = new Image();
         this.image.src = image_file;
+    }
+
+    /**
+     * Sets the default speed for spawned objects
+     */
+    setDefaultSpeed(speed : number) {
+        this.defaultSpeed = speed;
     }
 
     spawn(x: number, y: number) {
@@ -41,12 +72,28 @@ export class GameObjectClass {
 export class GameObject {
     x : number;
     y : number;
+    /** The maximum speed the object can go */
     speed : number = 200;
     x_speed : number = 0;
     y_speed : number = 0;
     /** The time it takes to reach full speed, in seconds */
     acceleration : number = 0.5;
+    /** The orientation in radians, where 0 is up. */
     orientation : number;
+    /** The x component of the orientation, to make movement computation more efficient */
+    direction_x : number = 0;
+    /** The x component of the orientation, to make movement computation more efficient */
+    direction_y : number = 1;
+
+    /** The current speed in the direction of travel */
+    velocity : number = 0;
+
+    boundToBoard : boolean = false;
+
+    destroyIfOffBoard : boolean = false;
+
+    standardMovement : boolean = true;
+
     gameclass : GameObjectClass;
     constructor(gameclass : GameObjectClass, x : number, y : number) {
         this.gameclass = gameclass;
@@ -55,10 +102,52 @@ export class GameObject {
         this.orientation = 0;
     }
 
+    /**
+     * Sets the orientation in degrees
+     */
     setOrientation(angle : number) {
-        this.orientation = 3.14159*angle/180;
+        this.orientation = Math.PI*angle/180;
+        this.direction_x = Math.cos(this.orientation);
+        this.direction_y = Math.sin(this.orientation);
     }
 
+    setOrientationRadians(angle : number) {
+        this.orientation = angle;
+        this.direction_x = Math.cos(this.orientation - Math.PI/2);
+        this.direction_y = Math.sin(this.orientation - Math.PI/2);
+    }
+
+    /**
+     * Internal function to move the object
+     */
+    doMovement(delta_t : number) {
+        this.x += this.direction_x*this.velocity*delta_t;
+        this.y += this.direction_y*this.velocity*delta_t;
+        console.log(this.gameclass.name, this.x, this.y, this.direction_x, this.direction_y, this.velocity, delta_t);
+        if(this.boundToBoard) {
+            if(this.x < 0)
+                this.x = 0;
+            if(this.x > boardWidth)
+                this.x = boardWidth;
+            if(this.y < 0)
+                this.y = 0;
+            if(this.y > boardHeight)
+                this.y = boardHeight;
+        }
+        if(this.destroyIfOffBoard) {
+            if(this.x < 0 || this.x > boardWidth || this.y < 0 || this.y > boardHeight) {
+                this.destroy();
+            }
+        }
+    }
+
+    destroy() {
+        gameObjects.delete(this);
+    }
+
+    /**
+     * Internal function to handle drawing
+     */
     draw(ctx : CanvasRenderingContext2D) {
         ctx.save();
         // console.log("translate to ", this.x, this.y);
@@ -77,7 +166,7 @@ export class PlayerClass extends GameObjectClass {
     spawn(x: number, y: number) : Player {
         const player = new Player(this, x, y);
         players.push(player);
-        gameObjects.push(player);
+        gameObjects.add(player);
         return player;
     }
 }
@@ -90,6 +179,27 @@ export class Player extends GameObject {
 
     constructor(gameclass : PlayerClass, x : number, y : number) {
         super(gameclass, x, y);
+        this.standardMovement = false;
+    }
+
+    doMovement(delta_t: number): void {
+        const normalized_x_speed = this.x_speed/this.speed;
+        const normalized_y_speed = this.y_speed/this.speed;
+        let norm = Math.sqrt(normalized_x_speed*normalized_x_speed + normalized_y_speed*normalized_y_speed);
+        if(norm < 1)
+            norm = 1;
+        // console.log(this.gameclass.name,  this.x, this.y, this.x_speed, this.y_speed, "norm:", norm, "delta_t:", delta_t);
+        // console.log("adding ", delta_t*(this.x_speed/norm), delta_t*(this.y_speed/norm));
+        this.x += delta_t*(this.x_speed/norm);
+        this.y += delta_t*(this.y_speed/norm);
+        if(this.x < 0)
+            this.x = 0;
+        if(this.x > boardWidth)
+            this.x = boardWidth;
+        if(this.y < 0)
+            this.y = 0;
+        if(this.y > boardHeight)
+            this.y = boardHeight;
     }
 
     enableArrowKeysMovement() {
@@ -103,18 +213,30 @@ export class Player extends GameObject {
     }
 }
 
-export class ItemClass extends GameObjectClass {
-    constructor(name : string, image_file : string) {
-        super(name, image_file);
-    }
-
-}
 
 export class EnemyClass extends GameObjectClass {
     constructor(name : string, image_file : string) {
         super(name, image_file);
     }
 
+    spawn(x: number, y: number) : Enemy {
+        const enemy = new Enemy(this, x, y);
+        enemies.add(enemy);
+        gameObjects.add(enemy);
+        return enemy;
+    }
+}
+
+
+export class Enemy extends GameObject {
+    constructor(gameclass : EnemyClass, x : number, y : number) {
+        super(gameclass, x, y);
+    }
+
+    destroy(): void {
+        gameObjects.delete(this);
+        enemies.delete(this);
+    }
 }
 
 export class ProjectileClass extends GameObjectClass {
@@ -122,19 +244,62 @@ export class ProjectileClass extends GameObjectClass {
         super(name, image_file);
     }
 
-}
+    spawn(x: number, y: number) : Projectile {
+        const projectile = new Projectile(this, x, y);
+        projectile.speed = this.defaultSpeed;
+        projectiles.add(projectile);
+        gameObjects.add(projectile);
+        return projectile;
+    }
 
-
-export class Enemy extends GameObject {
-
+    spawnAt(gameObject: GameObject) : Projectile {
+        const projectile = new Projectile(this, gameObject.x, gameObject.y);
+        projectile.setOrientationRadians(gameObject.orientation);
+        projectile.speed = this.defaultSpeed;
+        projectile.velocity = projectile.speed;
+        projectiles.add(projectile);
+        gameObjects.add(projectile);
+        return projectile;
+    }
 }
 
 export class Projectile extends GameObject {
+    constructor(gameclass : ProjectileClass, x : number, y : number) {
+        super(gameclass, x, y);
+        this.destroyIfOffBoard = true;
+        this.boundToBoard = false;
+    }
+
+    destroy(): void {
+        gameObjects.delete(this);
+        projectiles.delete(this);
+    }
 
 }
 
-export class Item extends GameObject {
+export class ItemClass extends GameObjectClass {
+    constructor(name : string, image_file : string) {
+        super(name, image_file);
+    }
 
+    spawn(x: number, y: number) : Item {
+        const item = new Item(this, x, y);
+        items.add(item);
+        gameObjects.add(item);
+        return item;
+    }
+}
+
+
+export class Item extends GameObject {
+    constructor(gameclass : ItemClass, x : number, y: number) {
+        super(gameclass, x, y);
+    }
+
+    destroy(): void {
+        gameObjects.delete(this);
+        items.delete(this);
+    }
 }
 
 
@@ -146,11 +311,20 @@ export function loadEnemy(name : string, image_file : string) : EnemyClass {
     return enemy;
 }
 
+/**
+ * Register a callback to be called every tick
+ */
 export function everyTick(callback : () => void) {
     // Register a callback to be called every tick
     tickWork.push(callback);
 }
 
+/**
+ * Register a callback to be called periodically (every so many seconds)
+ */
+export function periodically(seconds : number, callback : () => void) {
+    periodicWork.push(new PeriodicWork(seconds, callback));
+}
 
 export function initEngine(screenCanvas: HTMLCanvasElement) {
     canvas = screenCanvas;
@@ -173,6 +347,22 @@ function eventHandlerKeyDown(event : KeyboardEvent) {
     keyMap.set(event.key, true);
     if(initial) {
         keyMapTimes.set(event.key, Date.now());
+    }
+
+    /* Pause / Unpause */
+    if(event.key == 'p') {
+        console.log("Pause / Unpause");
+
+        if(gameLoopTimeout >= 0) {
+            /* Pause */
+            clearTimeout(gameLoopTimeout);
+            gameLoopTimeout = -1;
+        } else {
+            /* Unpause */
+            lastGameLoopTime = Date.now() - 1000/ticksPerSecond;
+            mainGameLoop();
+        }
+
     }
     // console.log("Key Down: '" + event.key + "'", initial);
 }
@@ -209,6 +399,9 @@ function mainGameLoop() {
     }
 
     // Consider timed actions
+    for(const work of periodicWork) {
+        work.timeElapsed(delta_t);
+    }
 
     // draw
     draw();
@@ -216,7 +409,7 @@ function mainGameLoop() {
     // Set the timer 
     const elapsed_time = Date.now() - start_time;
     const time_to_wait = (1000 / ticksPerSecond) - elapsed_time;
-    setTimeout(mainGameLoop, time_to_wait);
+    gameLoopTimeout = setTimeout(mainGameLoop, time_to_wait);
 }
 
 function draw() {
@@ -232,23 +425,7 @@ function draw() {
 
 function moveObjects(delta_t : number) {
     for(const object of gameObjects) {
-        const normalized_x_speed = object.x_speed/object.speed;
-        const normalized_y_speed = object.y_speed/object.speed;
-        let norm = Math.sqrt(normalized_x_speed*normalized_x_speed + normalized_y_speed*normalized_y_speed);
-        if(norm < 1)
-            norm = 1;
-        // console.log(object.gameclass.name,  object.x, object.y, object.x_speed, object.y_speed, "norm:", norm, "delta_t:", delta_t);
-        // console.log("adding ", delta_t*(object.x_speed/norm), delta_t*(object.y_speed/norm));
-        object.x += delta_t*(object.x_speed/norm);
-        object.y += delta_t*(object.y_speed/norm);
-        if(object.x < 0)
-            object.x = 0;
-        if(object.x > boardWidth)
-            object.x = boardWidth;
-        if(object.y < 0)
-            object.y = 0;
-        if(object.y > boardHeight)
-            object.y = boardHeight;
+        object.doMovement(delta_t);
     }
 }
 
@@ -294,6 +471,7 @@ function userInput() {
             // Not yet implemented
         }
 
+        // TODO: redo this in terms of velocity and direction
 
         if(up) {
             const accel = Math.min(1, (now-(keyMapTimes.get('w')||0))/p_accel);
@@ -336,4 +514,5 @@ function userInput() {
             }
         }
     }
+
 }
