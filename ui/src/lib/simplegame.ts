@@ -49,11 +49,19 @@ export class GameObjectClass {
     name : string;
     image : HTMLImageElement;
     defaultSpeed : number = 100;
+    defaultWidth : number;
+    defaultHeight : number;
+    hitboxWidth : number;
+    hitboxHeight : number;
 
     constructor(name : string, image_file : string) {
         this.name = name;
         this.image = new Image();
         this.image.src = image_file;
+        this.defaultWidth = this.image.width;
+        this.defaultHeight = this.image.height;
+        this.hitboxWidth = this.defaultWidth;
+        this.hitboxHeight = this.defaultHeight;
     }
 
     /**
@@ -72,6 +80,10 @@ export class GameObjectClass {
 export class GameObject {
     x : number;
     y : number;
+    width: number;
+    height : number;
+    hitboxWidth : number;
+    hitboxHeight : number;
     /** The maximum speed the object can go */
     speed : number = 200;
     x_speed : number = 0;
@@ -99,6 +111,10 @@ export class GameObject {
         this.gameclass = gameclass;
         this.x = x;
         this.y = y;
+        this.width = gameclass.defaultWidth;
+        this.height = gameclass.defaultHeight;
+        this.hitboxWidth = gameclass.hitboxWidth;
+        this.hitboxHeight = gameclass.hitboxHeight;
         this.orientation = 0;
     }
 
@@ -392,6 +408,7 @@ function mainGameLoop() {
     moveObjects(delta_t);
 
     // Detect Collisions
+    doCollisionDetection();
 
     // Take tick actions
     for(const work of tickWork) {
@@ -496,11 +513,9 @@ function userInput() {
             if((keyMapTimes.get('w')||0) > (keyMapTimes.get('s')||0)) {
                 const accel = Math.min(1, (now-(keyMapTimes.get('w')||0))/p_accel);
                 player.y_speed = accel*player.speed - player.speed;
-                //console.log('w', player.y_speed, accel);
             } else {
                 const accel = Math.min(1, (now-(keyMapTimes.get('s')||0))/p_accel);
                 player.y_speed = -accel*player.speed + player.speed;
-                //console.log('s', player.y_speed, accel);
             }
             
         }
@@ -514,5 +529,14 @@ function userInput() {
             }
         }
     }
+
+}
+
+
+function doCollisionDetection() {
+
+
+
+
 
 }
