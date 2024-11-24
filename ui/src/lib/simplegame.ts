@@ -1,6 +1,7 @@
 /* The game engine library */
 
 import {setup} from '../game';
+import type { box2, matrix2 } from './util';
 
 let ticksPerSecond = 30;
 let canvas: HTMLCanvasElement;
@@ -84,6 +85,8 @@ export class GameObject {
     height : number;
     hitboxWidth : number;
     hitboxHeight : number;
+
+
     /** The maximum speed the object can go */
     speed : number = 200;
     x_speed : number = 0;
