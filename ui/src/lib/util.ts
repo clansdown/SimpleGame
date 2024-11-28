@@ -40,3 +40,21 @@ export function multiplyMatrices(m1 : matrix2, m2 : matrix2) : matrix2 {
         m1[2] * m2[1] + m1[3] * m2[3] 
     ];
 }
+
+export function transpose_matrix(m : matrix2) : matrix2 {
+    return [m[0], m[2], m[1], m[3]];
+}
+
+export function applyMatrixToBox(m : matrix2, b : box2) : box2 {
+    return [
+        b[0] * m[0] + b[1] * m[1],
+        b[0] * m[2] + b[1] * m[3],
+        b[2] * m[0] + b[3] * m[1],
+        b[2] * m[2] + b[3] * m[3],
+        b[4] * m[0] + b[5] * m[1],
+        b[4] * m[2] + b[5] * m[3],
+        b[6] * m[0] + b[7] * m[1],
+        b[6] * m[2] + b[7] * m[3]
+    ];
+}
+
