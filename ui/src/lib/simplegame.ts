@@ -18,6 +18,8 @@ const periodicWork : PeriodicWork[] = [];
 
 const keyMap = new Map<string, boolean>();
 const keyMapTimes = new Map<string, number>();
+const collisionActions : CollisionAction[] = [];
+
 
 let boardWidth = 10000;
 let boardHeight = 10000;
@@ -25,6 +27,17 @@ let windowWidth = 1000;
 let windowHeight = 1000;
 
 let gameLoopTimeout : number = -1;
+
+class CollisionAction {
+    gameClass : GameObjectClass|null;
+    gameObject : GameObject|null;
+    work : (t:GameObject, o:GameObject) => void;
+    constructor(work : (t:GameObject, o:GameObject) => void, gameClass : GameObjectClass|null, gameObject : GameObject|null) {
+        this.work = work;
+        this.gameClass = gameClass;
+        this.gameObject = gameObject;
+    }
+}
 
 class PeriodicWork {
     period : number;
@@ -55,6 +68,9 @@ export class GameObjectClass {
     hitboxWidth : number;
     hitboxHeight : number;
 
+    // TODO: implement the idea of inheritance, so it is possible to create a child class of a GameObjectClass; this will have implications for other
+    // things in the system like collision trees
+
     constructor(name : string, image_file : string) {
         this.name = name;
         this.image = new Image();
@@ -74,7 +90,12 @@ export class GameObjectClass {
 
     spawn(x: number, y: number) {
         // Create a new object of this type at the given location
-        
+        // This probably shouldn't be used directly
+    }
+
+    onCollisionWith(other : GameObjectClass, work : (t : GameObject, o:GameObject)=>void) {
+        // Register a callback to be called when this object collides with an object of the given class
+        // TODO: implement
     }
 }
 
@@ -162,6 +183,7 @@ export class GameObject {
 
     destroy() {
         gameObjects.delete(this);
+        // TODO: scan the collision detection actions and remove from that, too
     }
 
     /**
@@ -174,6 +196,14 @@ export class GameObject {
         ctx.rotate(this.orientation);
         ctx.drawImage(this.gameclass.image, -this.gameclass.image.width / 2, -this.gameclass.image.height / 2);
         ctx.restore();
+    }
+
+    onCollisionWith(other : GameObjectClass, work : (o:GameObject)=>void) {
+        collisionActions.push(new CollisionAction((t:GameObject,o:GameObject)=>{work(o)}, other, null));
+    }
+
+    onCollisionWithParticular(other : GameObject, work : ()=>void) {
+        collisionActions.push(new CollisionAction(work, null, other));
     }
 }
 
