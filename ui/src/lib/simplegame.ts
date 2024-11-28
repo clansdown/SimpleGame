@@ -4,15 +4,14 @@ import {setup} from '../game';
 import { CollisionDetector } from './collision';
 import type { box2, matrix2 } from './util';
 
-let ticksPerSecond = 30;
-let canvas: HTMLCanvasElement;
-let lastGameLoopTime : number;
 
-let gameObjects : Set<GameObject> = new Set();
-let players : Player[] = [];
-let enemies : Set<Enemy> = new Set();
-let projectiles : Set<Projectile> = new Set();
-let items : Set<Item> = new Set();
+
+const gameClasses : GameObjectClass[] = [];
+const gameObjects : Set<GameObject> = new Set();
+const players : Player[] = [];
+const enemies : Set<Enemy> = new Set();
+const projectiles : Set<Projectile> = new Set();
+const items : Set<Item> = new Set();
 
 const tickWork : ((delta_t:number) => void)[] = [];
 const periodicWork : PeriodicWork[] = [];
@@ -27,7 +26,14 @@ let boardHeight = 10000;
 let windowWidth = 1000;
 let windowHeight = 1000;
 
+let onLoadedWork : (()=>void)[] = [];
+
+let ticksPerSecond = 30;
+let canvas: HTMLCanvasElement;
+let lastGameLoopTime : number;
+
 let gameLoopTimeout : number = -1;
+let notAllClassesAreLoaded : boolean = true;
 
 class CollisionAction {
     sourceGameClass : GameObjectClass|null;
@@ -68,10 +74,11 @@ export class GameObjectClass {
     name : string;
     image : HTMLImageElement;
     defaultSpeed : number = 100;
-    defaultWidth : number;
-    defaultHeight : number;
-    hitboxWidth : number;
-    hitboxHeight : number;
+    defaultWidth : number = 0;
+    defaultHeight : number = 0;
+    hitboxWidth : number = 0;
+    hitboxHeight : number = 0;
+    loaded : boolean = false;
     /**
      * The set of all objects of this class
      */
@@ -83,11 +90,15 @@ export class GameObjectClass {
     constructor(name : string, image_file : string) {
         this.name = name;
         this.image = new Image();
+        this.image.onload = () => {
+            this.defaultWidth = this.image.width;
+            this.defaultHeight = this.image.height;
+            this.hitboxWidth = this.defaultWidth;
+            this.hitboxHeight = this.defaultHeight;
+            this.loaded = true;
+        }
         this.image.src = image_file;
-        this.defaultWidth = this.image.width;
-        this.defaultHeight = this.image.height;
-        this.hitboxWidth = this.defaultWidth;
-        this.hitboxHeight = this.defaultHeight;
+        gameClasses.push(this);
     }
 
     /**
@@ -180,7 +191,7 @@ export class GameObject {
     doMovement(delta_t : number) {
         this.x += this.direction_x*this.velocity*delta_t;
         this.y += this.direction_y*this.velocity*delta_t;
-        console.log(this.gameclass.name, this.x, this.y, this.direction_x, this.direction_y, this.velocity, delta_t);
+        // console.log(this.gameclass.name, this.x, this.y, this.direction_x, this.direction_y, this.velocity, delta_t);
         if(this.boundToBoard) {
             if(this.x < 0)
                 this.x = 0;
@@ -285,7 +296,11 @@ export class EnemyClass extends GameObjectClass {
     }
 
     spawn(x: number, y: number) : Enemy {
+        if(!this.loaded) {
+            console.log("Spawning before resource is loaded!");
+        }
         const enemy = new Enemy(this, x, y);
+        super.spawned(enemy);
         enemies.add(enemy);
         gameObjects.add(enemy);
         return enemy;
@@ -298,9 +313,6 @@ export class Enemy extends GameObject {
         super(gameclass, x, y);
     }
 
-    destroy(): void {
-        this.gameClass.destroy(this);
-    }
 }
 
 export class ProjectileClass extends GameObjectClass {
@@ -441,13 +453,38 @@ function eventHandlerKeyUp(event : KeyboardEvent) {
     }
 }
 
+function allClassesLoaded() : boolean {
+    for(const gameclass of gameClasses) {
+        if(!gameclass.loaded) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /**
  * The main game loop
  */
 function mainGameLoop() {
+    /* Don't go through with the main loop until all game classes have loaded their resources */
+    if(notAllClassesAreLoaded) {
+        if(allClassesLoaded()) {
+            notAllClassesAreLoaded = false;
+            lastGameLoopTime = Date.now();
+            for(const work of onLoadedWork) {
+                work();
+            }
+        } else {
+            gameLoopTimeout = setTimeout(mainGameLoop, 1000/ticksPerSecond);
+            return;
+        }
+    }
+
+    /* Set up the loop */
     const start_time = Date.now();
     const delta_t = (start_time - lastGameLoopTime)/1000;
     lastGameLoopTime = start_time;
+    // console.log("delta_t:", delta_t);
 
     // User Input
     userInput();
@@ -580,14 +617,33 @@ function userInput() {
 
 }
 
+export function whenLoaded(work : ()=>void) {
+    onLoadedWork.push(work);
+}
 
 function doCollisionDetection() {
+    // console.log("Doing collision detection");
     const detector = new CollisionDetector(boardWidth, boardHeight);
     for(const action of collisionActions) {
-        if(action.targetGameClass) {
-            detector.buildTree(action.targetGameClass.name, action.targetGameClass.gameObjects);
-        }
+        if(action.sourceGameClass) {
+            
 
+        }
+        if(action.sourceGameObject) {
+            if(action.targetGameClass) {
+                const tag = action.targetGameClass.name;
+                // console.log("Building tree for ", tag);
+                detector.buildTree(tag, action.targetGameClass.gameObjects);
+                const collisions = detector.detectCollisions([action.sourceGameObject], [tag]);
+                for(const collision of collisions) {
+                    action.work(action.sourceGameObject, collision);
+                }
+            }
+            if(action.targetGameObject) {
+                // Just directly check if they collide
+
+            }
+        }
 
     }
 

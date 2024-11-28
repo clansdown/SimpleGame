@@ -56,8 +56,10 @@ class TreeNode {
     objects : CollisionObject[]|null = [];
 
     public insert(object : CollisionObject) {
+        // console.log("insert(",object,")");
         /* If we've got less than 8 objects, just append it to our list */
         if(!this.quadrantsAllocated && (!this.objects || this.objects.length <= 8)) {
+            // console.log("Inserting into objects.");
             if(!this.objects)
                 this.objects = [];
             this.objects.push(object);
@@ -148,8 +150,12 @@ class TreeNode {
         /* Check the objects that span multiple quadrants or aren't yet put in quadrants */
         if(this.objects) {
             for(const other of this.objects) {
+                // console.log("Checking collision between ", object, " and ", other);
                 if(collides(object, other)) {
+                    // console.log("Collision detected between ", object, " and ", other);
                     collided.push(other.object);
+                } else {
+                    // console.log("No collision between ", object,  " and ", other);
                 }
             }
         }
@@ -289,7 +295,9 @@ export class CollisionDetector {
         if(this.trees.has(tag))
             return;
         const tree = new TreeNode(0, 0, this.boardWidth, this.boardHeight);
+        // console.log("Building tree for tag: ",  tag, " with objects: ", gameObjects);
         for(const object of gameObjects) {
+            // console.log("buildTree: inserting ", object);
             tree.insert(this.getCollisionObject(object));
         }
     
@@ -304,7 +312,7 @@ export class CollisionDetector {
         return obj;
     }
 
-    detectCollisions(objects : GameObject[], tags : string[]) : GameObject[] {
+    detectCollisions(objects : Iterable<GameObject>, tags : Iterable<string>) : GameObject[] {
         const collided : GameObject[] = [];
 
         for(const object of objects) {
@@ -315,6 +323,7 @@ export class CollisionDetector {
                     console.log("No tree found for tag: " + tag);
                     continue;
                 }
+                // console.log("checking tree ", tree);
                 tree.findCollisions(collisionObject, collided);
             }
         }

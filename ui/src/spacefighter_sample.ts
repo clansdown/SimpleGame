@@ -1,8 +1,9 @@
-import { EnemyClass, everyTick, GameObject, periodically, PlayerClass, ProjectileClass } from "./lib/simplegame";
+import { EnemyClass, everyTick, GameObject, periodically, PlayerClass, ProjectileClass, whenLoaded } from "./lib/simplegame";
 
 export function setup_spacefighter() {
+
     let playerClass = new PlayerClass("player", "player.png");
-    let player = playerClass.spawn(180, 180);
+    let player = playerClass.spawn(180, 320);
     player.enableWasdKeysMovement();
 
     let playerShotClass = new ProjectileClass("playerShot", "player_shot.png");
@@ -11,7 +12,7 @@ export function setup_spacefighter() {
     let peonClass = new EnemyClass("peon", "peon.png");
 
     everyTick(() => {
-        player.setOrientation((Date.now() / 100) % 360);
+        // player.setOrientation((Date.now() / 100) % 360);
     });
 
     periodically(1, () => {
@@ -23,12 +24,16 @@ export function setup_spacefighter() {
         });
     });
 
+    whenLoaded(() => {
+        let peon = peonClass.spawn(180, 100);
+    });
+
     periodically(3, () => {
-        console.log("Spawning peon");
         let peon = peonClass.spawn(1000*Math.random(), 1000*Math.random());
         // peon.setTarget(player);
         // peon.enableChase();
     });
+
 
 
 
