@@ -285,7 +285,7 @@ export class CollisionDetector {
         this.boardHeight = boardHeight;
     } 
 
-    buildTree(tag : string, gameObjects : GameObject[]) {
+    buildTree(tag : string, gameObjects : Iterable<GameObject>) {
         if(this.trees.has(tag))
             return;
         const tree = new TreeNode(0, 0, this.boardWidth, this.boardHeight);
@@ -324,4 +324,3 @@ export class CollisionDetector {
 
 }
 
-// TODO: perhaps make a Collision class for doing a pass that can do all of the caching possible on a pass, e.g. have a CollisionObject map
