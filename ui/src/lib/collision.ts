@@ -286,6 +286,8 @@ export class CollisionDetector {
     } 
 
     buildTree(tag : string, gameObjects : GameObject[]) {
+        if(this.trees.has(tag))
+            return;
         const tree = new TreeNode(0, 0, this.boardWidth, this.boardHeight);
         for(const object of gameObjects) {
             tree.insert(this.getCollisionObject(object));

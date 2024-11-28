@@ -1,6 +1,7 @@
 /* The game engine library */
 
 import {setup} from '../game';
+import { CollisionDetector } from './collision';
 import type { box2, matrix2 } from './util';
 
 let ticksPerSecond = 30;
@@ -29,13 +30,17 @@ let windowHeight = 1000;
 let gameLoopTimeout : number = -1;
 
 class CollisionAction {
-    gameClass : GameObjectClass|null;
-    gameObject : GameObject|null;
+    sourceGameClass : GameObjectClass|null;
+    sourceGameObject : GameObject|null
+    targetGameClass : GameObjectClass|null;
+    targetGameObject : GameObject|null;
     work : (t:GameObject, o:GameObject) => void;
-    constructor(work : (t:GameObject, o:GameObject) => void, gameClass : GameObjectClass|null, gameObject : GameObject|null) {
+    constructor(work : (t:GameObject, o:GameObject) => void, sourceClass : GameObjectClass|null, sourceObject:GameObject|null,  gameClass : GameObjectClass|null, gameObject : GameObject|null) {
         this.work = work;
-        this.gameClass = gameClass;
-        this.gameObject = gameObject;
+        this.sourceGameClass = sourceClass;
+        this.sourceGameObject = sourceObject;
+        this.targetGameClass = gameClass;
+        this.targetGameObject = gameObject;
     }
 }
 
@@ -67,6 +72,10 @@ export class GameObjectClass {
     defaultHeight : number;
     hitboxWidth : number;
     hitboxHeight : number;
+    /**
+     * The set of all objects of this class
+     */
+    gameObjects : Set<GameObject> = new Set();
 
     // TODO: implement the idea of inheritance, so it is possible to create a child class of a GameObjectClass; this will have implications for other
     // things in the system like collision trees
@@ -93,9 +102,17 @@ export class GameObjectClass {
         // This probably shouldn't be used directly
     }
 
+    protected spawned(object : GameObject) {
+        this.gameObjects.add(object);
+    }
+
+    public destroy(object : GameObject) {
+        gameObjects.delete(object);
+        this.gameObjects.delete(object);
+    }
+
     onCollisionWith(other : GameObjectClass, work : (t : GameObject, o:GameObject)=>void) {
-        // Register a callback to be called when this object collides with an object of the given class
-        // TODO: implement
+        collisionActions.push(new CollisionAction(work, this, null, other, null));
     }
 }
 
@@ -182,8 +199,7 @@ export class GameObject {
     }
 
     destroy() {
-        gameObjects.delete(this);
-        // TODO: scan the collision detection actions and remove from that, too
+        this.gameclass.destroy(this);
     }
 
     /**
@@ -199,11 +215,11 @@ export class GameObject {
     }
 
     onCollisionWith(other : GameObjectClass, work : (o:GameObject)=>void) {
-        collisionActions.push(new CollisionAction((t:GameObject,o:GameObject)=>{work(o)}, other, null));
+        collisionActions.push(new CollisionAction((t:GameObject,o:GameObject)=>{work(o)}, null, this, other, null));
     }
 
     onCollisionWithParticular(other : GameObject, work : ()=>void) {
-        collisionActions.push(new CollisionAction(work, null, other));
+        collisionActions.push(new CollisionAction(work, null, this, null, other));
     }
 }
 
@@ -283,8 +299,7 @@ export class Enemy extends GameObject {
     }
 
     destroy(): void {
-        gameObjects.delete(this);
-        enemies.delete(this);
+        this.gameClass.destroy(this);
     }
 }
 
@@ -567,9 +582,13 @@ function userInput() {
 
 
 function doCollisionDetection() {
+    const detector = new CollisionDetector(boardWidth, boardHeight);
+    for(const action of collisionActions) {
+        if(action.targetGameClass) {
+            detector.buildTree(action.targetGameClass.name, action.targetGameClass.gameObjects);
+        }
 
 
-
-
+    }
 
 }
