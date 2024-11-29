@@ -115,6 +115,7 @@ export class GameObjectClass {
 
     protected spawned(object : GameObject) {
         this.gameObjects.add(object);
+        gameObjects.add(object);
     }
 
     public destroy(object : GameObject) {
@@ -159,6 +160,21 @@ export class GameObject {
     standardMovement : boolean = true;
 
     gameclass : GameObjectClass;
+
+    fadeInMillis : number = 0;
+    fateOutMillis : number = 0;
+
+    /**
+     * If not zero, how long this object should exist for; will auto-destroy after this time
+     */
+    maxDurationMillis : number = 0;
+
+    /**
+     * How long this object has existed for
+     */
+    timeExistedMillis : number = 0;
+
+
     constructor(gameclass : GameObjectClass, x : number, y : number) {
         this.gameclass = gameclass;
         this.x = x;
@@ -168,6 +184,13 @@ export class GameObject {
         this.hitboxWidth = gameclass.hitboxWidth;
         this.hitboxHeight = gameclass.hitboxHeight;
         this.orientation = 0;
+    }
+
+    /**
+     * Sets the maximum duration in milliseconds
+     */
+    setMaxDuration(millis : number) {
+        this.maxDurationMillis = millis;
     }
 
     /**
@@ -218,9 +241,22 @@ export class GameObject {
      */
     draw(ctx : CanvasRenderingContext2D) {
         ctx.save();
-        // console.log("translate to ", this.x, this.y);
+        /* Put it in the right place */
         ctx.translate(this.x, this.y);
         ctx.rotate(this.orientation);
+
+        /* Fade in */
+        if(this.fadeInMillis > 0 && this.timeExistedMillis < this.fadeInMillis) {
+            ctx.globalAlpha = Math.min(1, this.timeExistedMillis/this.fadeInMillis);
+        }
+        /* Fade out */
+        if(this.fateOutMillis > 0 && this.timeExistedMillis >= (this.maxDurationMillis - this.fateOutMillis)) {
+            ctx.globalAlpha = Math.max(0, Math.min(1, (this.maxDurationMillis - this.timeExistedMillis)/this.fateOutMillis));
+        }
+        /* Scale */
+        if(this.width > 0 && this.height > 0)
+            ctx.scale(this.width/this.gameclass.image.width, this.height/this.gameclass.image.height);
+
         ctx.drawImage(this.gameclass.image, -this.gameclass.image.width / 2, -this.gameclass.image.height / 2);
         ctx.restore();
     }
@@ -378,6 +414,47 @@ export class Item extends GameObject {
     }
 }
 
+export class EffectClass extends GameObjectClass {
+    defaultDuration : number;
+    defaultFadeIn : number;
+    defaultFadeOut : number;
+    constructor(name : string, image_file : string, duration : number = 1000, fadeIn : number = 0, fadeOut : number = 0) {
+        super(name, image_file);
+        this.defaultDuration = duration;
+        this.defaultFadeIn = fadeIn;
+        this.defaultFadeOut = fadeOut
+    }
+
+    spawnAt(gameObject : GameObject) : Effect {
+        const effect = new Effect(this, gameObject.x, gameObject.y);
+        effect.setMaxDuration(this.defaultDuration);
+        effect.fadeInMillis = this.defaultFadeIn;
+        effect.fateOutMillis = this.defaultFadeOut;
+        this.spawned(effect);
+        return effect;
+    }
+
+    spawn(x: number, y: number) : Effect {
+        const effect = new Effect(this, x, y);
+        effect.setMaxDuration(this.defaultDuration);
+        effect.fadeInMillis = this.defaultFadeIn;
+        effect.fateOutMillis = this.defaultFadeOut;
+        this.spawned(effect);
+        return effect;
+    }
+}
+
+export class Effect extends GameObject {
+    constructor(gameclass : EffectClass, x : number, y : number) {
+        super(gameclass, x, y);
+    }
+
+    destroy(): void {
+        super.destroy();
+        gameObjects.delete(this);
+    }
+}
+
 
 export function loadEnemy(name : string, image_file : string) : EnemyClass {
     const enemy = new EnemyClass(name, image_file);
@@ -486,6 +563,8 @@ function mainGameLoop() {
     lastGameLoopTime = start_time;
     // console.log("delta_t:", delta_t);
 
+    updateDurations(delta_t);
+
     // User Input
     userInput();
 
@@ -512,6 +591,15 @@ function mainGameLoop() {
     const elapsed_time = Date.now() - start_time;
     const time_to_wait = (1000 / ticksPerSecond) - elapsed_time;
     gameLoopTimeout = setTimeout(mainGameLoop, time_to_wait);
+}
+
+function updateDurations(delta_t : number) {
+    for(const object of gameObjects) {
+        object.timeExistedMillis += delta_t*1000;
+        if(object.maxDurationMillis > 0 && object.timeExistedMillis > object.maxDurationMillis) {
+            object.destroy();
+        }
+    }
 }
 
 function draw() {

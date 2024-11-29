@@ -1,4 +1,4 @@
-import { EnemyClass, everyTick, GameObject, periodically, PlayerClass, ProjectileClass, whenLoaded } from "./lib/simplegame";
+import { EffectClass, EnemyClass, everyTick, GameObject, periodically, PlayerClass, ProjectileClass, whenLoaded } from "./lib/simplegame";
 
 export function setup_spacefighter() {
 
@@ -11,6 +11,8 @@ export function setup_spacefighter() {
     
     let peonClass = new EnemyClass("peon", "peon.png");
 
+    const explosionClass = new EffectClass("explosion", "explosion.png", 300, 50, 100);
+
     everyTick(() => {
         // player.setOrientation((Date.now() / 100) % 360);
     });
@@ -19,8 +21,12 @@ export function setup_spacefighter() {
         let shot = playerShotClass.spawnAt(player);
         shot.onCollisionWith(peonClass, (peon : GameObject) => {
             console.log("boom!");
+            let explosion = explosionClass.spawnAt(peon);
+            explosion.width = 100;
+            explosion.height = 100;
             shot.destroy();
             peon.destroy();
+
         });
     });
 
