@@ -31,12 +31,13 @@ export function setup_spacefighter() {
         });
     });
 
-    whenLoaded(() => {
-        let peon = peonClass.spawn(180, 100);
-    });
 
-    periodically(3, () => {
+    periodically(1.5, () => {
         let peon = peonClass.spawn(1000*Math.random(), 1000*Math.random());
+        everyTick(() => {
+            peon.setOrientationTowards(player);
+            peon.move(80);
+        });
         // peon.setTarget(player);
         // peon.enableChase();
     });

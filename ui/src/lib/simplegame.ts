@@ -224,6 +224,10 @@ export class GameObject {
         this.direction_y = Math.sin(this.orientation - Math.PI/2);
     }
 
+    move(speed : number) {
+        this.velocity = speed;
+    }
+
     /**
      * Internal function to move the object
      */
