@@ -2,7 +2,7 @@
 
 import {setup} from '../game';
 import { CollisionDetector } from './collision';
-import type { box2, matrix2 } from './util';
+import type { Position2D, box2, matrix2 } from './util';
 
 
 
@@ -25,6 +25,10 @@ let boardWidth = 10000;
 let boardHeight = 10000;
 let windowWidth = 1000;
 let windowHeight = 1000;
+/** The X-offset of the window into the board */
+let windowX = 0;
+/** The Y-offset of the window into the board */
+let windowY = 0;
 
 let onLoadedWork : (()=>void)[] = [];
 
@@ -34,6 +38,9 @@ let lastGameLoopTime : number;
 
 let gameLoopTimeout : number = -1;
 let notAllClassesAreLoaded : boolean = true;
+
+/** Mouse coordinates on the board */
+let mousePosition : Position2D = {x: 0, y: 0};
 
 class CollisionAction {
     sourceGameClass : GameObjectClass|null;
@@ -204,6 +211,15 @@ export class GameObject {
 
     setOrientationRadians(angle : number) {
         this.orientation = angle;
+        this.direction_x = Math.cos(this.orientation - Math.PI/2);
+        this.direction_y = Math.sin(this.orientation - Math.PI/2);
+    }
+
+    setOrientationTowards(pos : Position2D) {
+        const dx = pos.x - this.x;
+        const dy = pos.y - this.y;
+        this.orientation = Math.atan2(dy, dx) + Math.PI/2;
+        debug("Setting orientation towards " + pos.x + ", " + pos.y + " from " + this.x + ", " + this.y + " to " + this.orientation);
         this.direction_x = Math.cos(this.orientation - Math.PI/2);
         this.direction_y = Math.sin(this.orientation - Math.PI/2);
     }
@@ -479,10 +495,18 @@ export function periodically(seconds : number, callback : () => void) {
     periodicWork.push(new PeriodicWork(seconds, callback));
 }
 
-export function initEngine(screenCanvas: HTMLCanvasElement) {
+let debugElement : HTMLDivElement;
+
+export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivElement) {
+    debugElement = debugDiv;
+    console.log("Initializing game engine, canvas: ", screenCanvas, "debug element:", debugDiv);
     canvas = screenCanvas;
     canvas.addEventListener('keydown', eventHandlerKeyDown);
     canvas.addEventListener('keyup', eventHandlerKeyUp);
+    // mouse handler
+    canvas.addEventListener('mousemove', eventHandlerMouseMove);
+    canvas.addEventListener('mousedown', eventHandlerMouseDown);
+    canvas.addEventListener('mouseup', eventHandlerMouseUp);
     canvas.focus();
 
     /* Call the game's setup function */
@@ -493,6 +517,46 @@ export function initEngine(screenCanvas: HTMLCanvasElement) {
     mainGameLoop();
 }
 
+function eventHandlerMouseMove(event : MouseEvent) {
+    mousePosition.x = windowWidth * (event.clientX/canvas.clientWidth) + windowX;
+    mousePosition.y = windowHeight * (event.clientY/canvas.clientHeight) + windowY;
+}
+
+function eventHandlerMouseDown(event : MouseEvent) {
+        // left mouse button
+        if(event.buttons & 1) {
+            let initial = keyMap.has('mouse1') ? !keyMap.get('mouse1') : true;
+            keyMap.set('mouse1', true);
+        }
+        // middle mouse button
+        if(event.buttons & 4) {
+            let initial = keyMap.has('mouse2') ? !keyMap.get('mouse2') : true;
+            keyMap.set('mouse2', true);
+        }
+        // right mouse button
+        if(event.buttons & 2) {
+            let initial = keyMap.has('mouse3') ? !keyMap.get('mouse3') : true;
+            keyMap.set('mouse3', true);
+        }
+}
+
+function eventHandlerMouseUp(event : MouseEvent) {
+    // left mouse button
+    if(!(event.buttons & 1)) {
+        let initial = keyMap.get('mouse1') == true;
+        keyMap.set('mouse1', false);
+    }
+    // middle mouse button
+    if(!(event.buttons & 4)) {
+        let initial = keyMap.get('mouse2') == true;
+        keyMap.set('mouse2', false);
+    }
+    // right mouse button
+    if(!(event.buttons & 2)) {
+        let initial = keyMap.get('mouse3') == true;
+        keyMap.set('mouse3', false);
+    }
+}
 
 function eventHandlerKeyDown(event : KeyboardEvent) {
     // Handle key presses
@@ -735,4 +799,15 @@ function doCollisionDetection() {
 
     }
 
+}
+
+export function debug(text : string) {
+    if(debugElement)
+        debugElement.innerHTML = text;
+    else
+        console.log(text);
+}
+
+export function getMousePosition() : Position2D {
+    return mousePosition;
 }

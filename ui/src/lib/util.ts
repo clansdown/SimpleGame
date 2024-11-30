@@ -58,3 +58,7 @@ export function applyMatrixToBox(m : matrix2, b : box2) : box2 {
     ];
 }
 
+export interface Position2D {
+    x : number;
+    y : number;
+}
