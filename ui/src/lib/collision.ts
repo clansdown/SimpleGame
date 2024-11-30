@@ -15,10 +15,10 @@ class CollisionObject {
     constructor(o : GameObject) {
         this.object = o;
         const rotation_matrix = generate_rotation_matrix(o.orientation);
-        const topLeft = multiplyMatrixVector(rotation_matrix, [o.x - o.hitboxWidth / 2, o.y + o.hitboxHeight / 2]);
-        const topRight = multiplyMatrixVector(rotation_matrix, [o.x + o.hitboxWidth / 2, o.y + o.hitboxHeight / 2]);
-        const bottomLeft = multiplyMatrixVector(rotation_matrix, [o.x - o.hitboxWidth / 2, o.y - o.hitboxHeight / 2]);
-        const bottomRight = multiplyMatrixVector(rotation_matrix, [o.x + o.hitboxWidth / 2, o.y - o.hitboxHeight / 2]);
+        const topLeft = multiplyMatrixVector(rotation_matrix, [-o.hitboxWidth / 2, o.hitboxHeight / 2]);
+        const topRight = multiplyMatrixVector(rotation_matrix, [ o.hitboxWidth / 2,  o.hitboxHeight / 2]);
+        const bottomLeft = multiplyMatrixVector(rotation_matrix, [ -o.hitboxWidth / 2,  -o.hitboxHeight / 2]);
+        const bottomRight = multiplyMatrixVector(rotation_matrix, [ o.hitboxWidth / 2,  -o.hitboxHeight / 2]);
         this.hitbox = [
             o.x + topLeft[0] , o.y + topLeft[1], 
             o.x + topRight[0], o.y + topRight[1], 
@@ -273,7 +273,6 @@ function findMinMax(arr : number[], offset : number = 0, stride : number = 2) : 
         }
     }
     return [min, max];
-
 }
 
 

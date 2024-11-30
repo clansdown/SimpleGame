@@ -219,7 +219,7 @@ export class GameObject {
         const dx = pos.x - this.x;
         const dy = pos.y - this.y;
         this.orientation = Math.atan2(dy, dx) + Math.PI/2;
-        debug("Setting orientation towards " + pos.x + ", " + pos.y + " from " + this.x + ", " + this.y + " to " + this.orientation);
+        // debug("Setting orientation towards " + pos.x + ", " + pos.y + " from " + this.x + ", " + this.y + " to " + this.orientation);
         this.direction_x = Math.cos(this.orientation - Math.PI/2);
         this.direction_y = Math.sin(this.orientation - Math.PI/2);
     }
@@ -499,7 +499,7 @@ let debugElement : HTMLDivElement;
 
 export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivElement) {
     debugElement = debugDiv;
-    console.log("Initializing game engine, canvas: ", screenCanvas, "debug element:", debugDiv);
+    debugElement.innerHTML = "";
     canvas = screenCanvas;
     canvas.addEventListener('keydown', eventHandlerKeyDown);
     canvas.addEventListener('keyup', eventHandlerKeyUp);
