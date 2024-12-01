@@ -15,7 +15,6 @@ export function setup_spacefighter() {
 
     everyTick(() => {
         player.setOrientationTowards(getMousePosition());
-        // player.setOrientation((Date.now() / 100) % 360);
     });
 
     periodically(0.5, () => {
@@ -38,8 +37,6 @@ export function setup_spacefighter() {
             peon.setOrientationTowards(player);
             peon.move(80);
         });
-        // peon.setTarget(player);
-        // peon.enableChase();
     });
 
 
