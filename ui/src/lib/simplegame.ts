@@ -143,6 +143,8 @@ export class GameObject {
     hitboxWidth : number;
     hitboxHeight : number;
 
+    /** Where users should hang their variables, e.g. var.hp, var.level, var.numberOfPowerUps, etc.  */
+    var : any = {};
 
     /** The maximum speed the object can go */
     speed : number = 200;
