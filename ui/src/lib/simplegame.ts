@@ -85,6 +85,8 @@ export class GameObjectClass {
     defaultHeight : number = 0;
     hitboxWidth : number = 0;
     hitboxHeight : number = 0;
+    hitboxXOffset : number = 0;
+    hitboxYOffset : number = 0;
     loaded : boolean = false;
     /**
      * The set of all objects of this class
@@ -100,8 +102,10 @@ export class GameObjectClass {
         this.image.onload = () => {
             this.defaultWidth = this.image.width;
             this.defaultHeight = this.image.height;
-            this.hitboxWidth = this.defaultWidth;
-            this.hitboxHeight = this.defaultHeight;
+            if(this.hitboxWidth == 0)
+                this.hitboxWidth = this.defaultWidth;
+            if(this.hitboxHeight == 0)
+                this.hitboxHeight = this.defaultHeight;
             this.loaded = true;
         }
         this.image.src = image_file;
@@ -115,9 +119,17 @@ export class GameObjectClass {
         this.defaultSpeed = speed;
     }
 
+    setBoundingBox(width : number, height : number, x_offset : number = 0, y_offset : number = 0) {
+        this.hitboxWidth = width;
+        this.hitboxHeight = height;
+        this.hitboxXOffset = x_offset;
+        this.hitboxYOffset = y_offset;
+    }
+
     spawn(x: number, y: number) {
         // Create a new object of this type at the given location
         // This probably shouldn't be used directly
+        console.log("Spawn not implemented for ", this.name);
     }
 
     protected spawned(object : GameObject) {
@@ -128,6 +140,12 @@ export class GameObjectClass {
     public destroy(object : GameObject) {
         gameObjects.delete(object);
         this.gameObjects.delete(object);
+        // scan through the collision actions and remove any that involve this object
+        for(const action of collisionActions) {
+            if(action.sourceGameObject === object || action.targetGameObject === object) {
+                collisionActions.splice(collisionActions.indexOf(action), 1);
+            }
+        }
     }
 
     onCollisionWith(other : GameObjectClass, work : (t : GameObject, o:GameObject)=>void) {
@@ -142,8 +160,10 @@ export class GameObject {
     height : number;
     hitboxWidth : number;
     hitboxHeight : number;
+    hitboxXOffset : number;
+    hitboxYOffset : number;
 
-    /** Where users should hang their variables, e.g. var.hp, var.level, var.numberOfPowerUps, etc.  */
+    /** Where users should hang their variables, e.g. var.hp, var.level, var.numberOfPowerUps, etc. */
     var : any = {};
 
     /** The maximum speed the object can go */
@@ -192,6 +212,8 @@ export class GameObject {
         this.height = gameclass.defaultHeight;
         this.hitboxWidth = gameclass.hitboxWidth;
         this.hitboxHeight = gameclass.hitboxHeight;
+        this.hitboxXOffset = gameclass.hitboxXOffset;
+        this.hitboxYOffset = gameclass.hitboxYOffset;
         this.orientation = 0;
     }
 
@@ -382,7 +404,7 @@ export class ProjectileClass extends GameObjectClass {
         const projectile = new Projectile(this, x, y);
         projectile.speed = this.defaultSpeed;
         projectiles.add(projectile);
-        gameObjects.add(projectile);
+        super.spawned(projectile);
         return projectile;
     }
 
@@ -392,8 +414,13 @@ export class ProjectileClass extends GameObjectClass {
         projectile.speed = this.defaultSpeed;
         projectile.velocity = projectile.speed;
         projectiles.add(projectile);
-        gameObjects.add(projectile);
+        super.spawned(projectile);
         return projectile;
+    }
+
+    destroy(projectile : Projectile) {
+        super.destroy(projectile);
+        projectiles.delete(projectile);
     }
 }
 
@@ -405,8 +432,7 @@ export class Projectile extends GameObject {
     }
 
     destroy(): void {
-        gameObjects.delete(this);
-        projectiles.delete(this);
+        this.gameclass.destroy(this);
     }
 
 }
@@ -642,7 +668,7 @@ function mainGameLoop() {
     moveObjects(delta_t);
 
     // Detect Collisions
-    doCollisionDetection();
+    let cd = doCollisionDetection();
 
     // Take tick actions
     for(const work of tickWork) {
@@ -656,6 +682,8 @@ function mainGameLoop() {
 
     // draw
     draw();
+
+    // debugDrawBoundingBoxes(cd);
 
     // Set the timer 
     const elapsed_time = Date.now() - start_time;
@@ -779,7 +807,7 @@ export function whenLoaded(work : ()=>void) {
     onLoadedWork.push(work);
 }
 
-function doCollisionDetection() {
+function doCollisionDetection() : CollisionDetector{
     // console.log("Doing collision detection");
     const detector = new CollisionDetector(boardWidth, boardHeight);
     for(const action of collisionActions) {
@@ -803,6 +831,20 @@ function doCollisionDetection() {
             }
         }
 
+    }
+    return detector;
+}
+
+function debugDrawBoundingBoxes(detector : CollisionDetector) {
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    ctx.strokeStyle = 'white';
+    for(const o of detector.getCollisionObjects()) {
+        for(let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(o.hitbox[i*2], o.hitbox[i*2+1]);
+            ctx.lineTo(o.hitbox[((i+1)%4)*2], o.hitbox[((i+1)%4)*2+1]);
+            ctx.stroke();
+        }
     }
 
 }

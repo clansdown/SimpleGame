@@ -10,6 +10,7 @@ export function setup_spacefighter() {
     playerShotClass.setDefaultSpeed(400);
     
     let peonClass = new EnemyClass("peon", "peon.png");
+    peonClass.setBoundingBox(50, 50);
 
     const explosionClass = new EffectClass("explosion", "explosion.png", 300, 50, 100);
 

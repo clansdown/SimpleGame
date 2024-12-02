@@ -15,10 +15,10 @@ class CollisionObject {
     constructor(o : GameObject) {
         this.object = o;
         const rotation_matrix = generate_rotation_matrix(o.orientation);
-        const topLeft = multiplyMatrixVector(rotation_matrix, [-o.hitboxWidth / 2, o.hitboxHeight / 2]);
-        const topRight = multiplyMatrixVector(rotation_matrix, [ o.hitboxWidth / 2,  o.hitboxHeight / 2]);
-        const bottomLeft = multiplyMatrixVector(rotation_matrix, [ -o.hitboxWidth / 2,  -o.hitboxHeight / 2]);
-        const bottomRight = multiplyMatrixVector(rotation_matrix, [ o.hitboxWidth / 2,  -o.hitboxHeight / 2]);
+        const topLeft = multiplyMatrixVector(rotation_matrix, [o.hitboxXOffset - o.hitboxWidth / 2, o.hitboxYOffset + o.hitboxHeight / 2]);
+        const topRight = multiplyMatrixVector(rotation_matrix, [ o.hitboxXOffset + o.hitboxWidth / 2, o.hitboxYOffset + o.hitboxHeight / 2]);
+        const bottomLeft = multiplyMatrixVector(rotation_matrix, [ o.hitboxXOffset - o.hitboxWidth / 2, o.hitboxYOffset - o.hitboxHeight / 2]);
+        const bottomRight = multiplyMatrixVector(rotation_matrix, [ o.hitboxXOffset + o.hitboxWidth / 2, o.hitboxYOffset - o.hitboxHeight / 2]);
         this.hitbox = [
             o.x + topLeft[0] , o.y + topLeft[1], 
             o.x + topRight[0], o.y + topRight[1], 
@@ -233,6 +233,8 @@ function collides(o1 : CollisionObject, o2 : CollisionObject) : boolean {
         return false;
     }
 
+    // console.log("Collision detected between ", o1, " and ", o2);
+
     return true;
 }
 
@@ -330,5 +332,8 @@ export class CollisionDetector {
         return collided;
     }
 
+    getCollisionObjects() : Iterable<CollisionObject> {
+        return this.objectCache.values();
+    }
 }
 
