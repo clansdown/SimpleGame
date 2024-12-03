@@ -1,6 +1,6 @@
 /* Collision detection related code */
 
-import type { GameObject } from "./simplegame";
+import type { GameObject } from "./gameclasses";
 import { applyMatrixToBox, generate_rotation_matrix, multiplyMatrixVector, transpose_matrix, type box2, type matrix2 } from "./util";
 
 class CollisionObject {

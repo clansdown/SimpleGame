@@ -1,4 +1,3 @@
-import { EnemyClass, everyTick, periodically, PlayerClass, ProjectileClass } from "./lib/simplegame";
 import { setup_spacefighter } from "./spacefighter_sample";
 
 /**
