@@ -456,7 +456,7 @@ export class EffectClass extends GameObjectClass {
         this.defaultFadeOut = fadeOut
     }
 
-    spawnAt(gameObject : GameObject) : Effect {
+    spawnAt(gameObject : Position2D) : Effect {
         const effect = new Effect(this, gameObject.x, gameObject.y);
         effect.setMaxDuration(this.defaultDuration);
         effect.fadeInMillis = this.defaultFadeIn;

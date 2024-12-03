@@ -1,5 +1,6 @@
 import {  everyTick, getMousePosition, periodically, whenLoaded } from "./lib/simplegame";
 import { EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
+import { midpoint } from "./lib/util";
 
 export function setup_spacefighter() {
     let playerClass = new PlayerClass("player", "player.png");
@@ -28,8 +29,7 @@ export function setup_spacefighter() {
         periodically(0.5, () => {
             let shot = playerShotClass.spawnAt(player);
             shot.onCollisionWithEnemy((e : GameObject) => {
-                console.log("boom!");
-                let explosion = explosionClass.spawnAt(e);
+                let explosion = explosionClass.spawnAt(midpoint(shot, e));
                 explosion.width = 100;
                 explosion.height = 100;
                 shot.destroy();

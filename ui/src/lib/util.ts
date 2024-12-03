@@ -62,3 +62,10 @@ export interface Position2D {
     x : number;
     y : number;
 }
+
+export function midpoint(o1 : Position2D, o2 : Position2D) : Position2D {
+    return {
+        x : (o1.x + o2.x) / 2,
+        y : (o1.y + o2.y) / 2
+    }
+}
