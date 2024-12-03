@@ -485,3 +485,49 @@ export class Effect extends GameObject {
         gameObjects.delete(this);
     }
 }
+
+export class TextClass extends GameObjectClass {
+    static rootTextClass : TextClass = new TextClass("root", null);
+    constructor(name : string, image_file : string|null) {
+        super(name, image_file, TextClass.rootTextClass);
+    }
+
+    spawnAt(text : string, pos : Position2D) : Text {
+        const t = new Text(this, text, pos.x, pos.y);
+        t.text = text;
+        this.spawned(t);
+        return t;
+    }
+
+
+}
+const textClass = new TextClass("root", null);
+export function createText(text : string, pos : Position2D) : Text {
+    return textClass.spawnAt(text, pos);
+}
+
+export class Text extends GameObject {
+    text : string;
+    size : number = 32;
+    foreground : string = "white";
+    background : string = "black";
+    
+
+    constructor(gameclass : TextClass, text:string, x : number, y : number) {
+        super(gameclass, x, y);
+        this.text = text;
+    }
+
+    draw(ctx : CanvasRenderingContext2D) {
+        console.log("Drawing text", this.text);
+        ctx.save();
+        ctx.font = this.size + "px Arial, Helvetica, sans-serif";
+        ctx.translate(this.x, this.y);
+        ctx.fillStyle = this.background;
+        ctx.fillText(this.text, 0, 0);
+        ctx.fillStyle = this.foreground;
+        ctx.fillText(this.text, -1, -1);
+        ctx.restore();
+    }
+}
+

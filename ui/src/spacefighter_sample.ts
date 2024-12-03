@@ -1,5 +1,5 @@
 import {  everyTick, getMousePosition, periodically, whenLoaded } from "./lib/simplegame";
-import { EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
+import { createText, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint } from "./lib/util";
 
 export function setup_spacefighter() {
@@ -17,7 +17,6 @@ export function setup_spacefighter() {
 
     const explosionClass = new EffectClass("explosion", "explosion.png", 300, 50, 100);
 
-
     whenLoaded(() => {
         let player = playerClass.spawn(180, 320);
         player.enableWasdKeysMovement();
@@ -34,6 +33,11 @@ export function setup_spacefighter() {
                 explosion.height = 100;
                 shot.destroy();
                 e.takeDamage(1);
+                const text = createText("1", e);
+                text.foreground = "red";
+                text.fadeInMillis = 100;
+                text.maxDurationMillis = 300;
+                text.fateOutMillis = 100;
             });
         });
 
