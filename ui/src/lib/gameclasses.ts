@@ -19,6 +19,9 @@ export class GameObjectClass {
     parent : GameObjectClass|null;
     children : Set<GameObjectClass> = new Set();
 
+    /** If set, work to be done when the object is destroyed */
+    onDestroyWork? : (o:GameObject)=>void;
+
     /**
      * The set of all objects of this class
      */
@@ -84,7 +87,14 @@ export class GameObjectClass {
         gameObjects.add(object);
     }
 
+    public onDestroy(work : (o : GameObject)=>void) {
+        this.onDestroyWork = work;
+    }
+
     public destroy(object : GameObject) {
+        if(this.onDestroyWork) {
+            this.onDestroyWork(object);
+        }
         gameObjects.delete(object);
         this.gameObjects.delete(object);
         // scan through the collision actions and remove any that involve this object
@@ -155,7 +165,9 @@ export class GameObject {
     gameclass : GameObjectClass;
 
     fadeInMillis : number = 0;
+    growInMillis : number = 0;
     fateOutMillis : number = 0;
+    growOutMillis : number = 0;
 
     /**
      * If not zero, how long this object should exist for; will auto-destroy after this time
@@ -167,6 +179,7 @@ export class GameObject {
      */
     timeExistedMillis : number = 0;
 
+    onDestroyWork? : ()=>void;
 
     constructor(gameclass : GameObjectClass, x : number, y : number) {
         this.gameclass = gameclass;
@@ -248,7 +261,14 @@ export class GameObject {
         }
     }
 
+    onDestroy(work : ()=>void) {
+        this.onDestroyWork = work;
+    }
+
     destroy() {
+        if(this.onDestroyWork) {
+            this.onDestroyWork();
+        }
         this.gameclass.destroy(this);
     }
 

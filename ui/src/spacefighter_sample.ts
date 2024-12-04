@@ -1,8 +1,11 @@
 import {  everyTick, getMousePosition, periodically, whenLoaded } from "./lib/simplegame";
-import { createText, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
+import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint } from "./lib/util";
 
 export function setup_spacefighter() {
+    const explosionClass = new EffectClass("explosion", "explosion.png", 300, 50, 100);
+    const playerShotExplosionClass = new EffectClass("playerShotExplosion", "player_shot_explosion.png", 200, 50, 100);
+
     let playerClass = new PlayerClass("player", "player.png");
     
     let playerShotClass = new ProjectileClass("playerShot", "player_shot.png");
@@ -10,12 +13,24 @@ export function setup_spacefighter() {
     
     let peonClass = new EnemyClass("peon", "peon.png");
     peonClass.setBoundingBox(50, 50);
+    peonClass.onDestroy((p) => {
+        let explosion = explosionClass.spawnAt(p);
+        explosion.growInMillis = 100;
+        explosion.width = 60;
+        explosion.height = 60;
+    });
 
     const centurionClass = new EnemyClass("centurion", "centurion.png", 10);
-    console.log("centurion class created: ", centurionClass.defaultHitpoints);
+    centurionClass.onDestroy((p) => {
+        let explosion = explosionClass.spawnAt(p);
+        explosion.maxDurationMillis = 500;
+        explosion.growInMillis = 150;
+        explosion.width = 300;
+        explosion.height = 300;
+        explosion.fateOutMillis = 150;
+    });
 
 
-    const explosionClass = new EffectClass("explosion", "explosion.png", 300, 50, 100);
 
     whenLoaded(() => {
         let player = playerClass.spawn(180, 320);
@@ -28,9 +43,9 @@ export function setup_spacefighter() {
         periodically(0.5, () => {
             let shot = playerShotClass.spawnAt(player);
             shot.onCollisionWithEnemy((e : GameObject) => {
-                let explosion = explosionClass.spawnAt(midpoint(shot, e));
-                explosion.width = 100;
-                explosion.height = 100;
+                let explosion = playerShotExplosionClass.spawnAt(midpoint(shot, e));
+                explosion.width = 30;
+                explosion.height = 30;
                 shot.destroy();
                 e.takeDamage(1);
                 const text = createText("1", e);
