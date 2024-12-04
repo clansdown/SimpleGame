@@ -281,6 +281,12 @@ export class GameObject {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.orientation);
 
+        /* Grow In */
+        if(this.growInMillis > 0 && this.timeExistedMillis < this.growInMillis) {
+            const scale = Math.min(1, 0.05 + this.timeExistedMillis/this.growInMillis);
+            ctx.scale(scale, scale);
+        }
+
         /* Fade in */
         if(this.fadeInMillis > 0 && this.timeExistedMillis < this.fadeInMillis) {
             ctx.globalAlpha = Math.min(1, this.timeExistedMillis/this.fadeInMillis);

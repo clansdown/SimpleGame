@@ -32,7 +32,7 @@ let windowY = 0;
 
 let onLoadedWork : (()=>void)[] = [];
 
-let ticksPerSecond = 30;
+let ticksPerSecond = 40;
 let canvas: HTMLCanvasElement;
 let lastGameLoopTime : number;
 
