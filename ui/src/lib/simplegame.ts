@@ -314,7 +314,7 @@ function updateCamera(delta_t : number) {
             }
             windowX = x;
             windowY = y;
-            console.log("Camera at", windowX, windowY);
+            // console.log("Camera at", windowX, windowY);
         }
     }
 }
