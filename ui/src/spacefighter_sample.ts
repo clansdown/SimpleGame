@@ -1,4 +1,4 @@
-import {  everyTick, getMousePosition, periodically, whenLoaded } from "./lib/simplegame";
+import {  everyTick, getMousePosition, onPause, onResume, periodically, whenLoaded } from "./lib/simplegame";
 import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint } from "./lib/util";
 import { Music, SoundEffect } from "./lib/audio";
@@ -35,6 +35,13 @@ export function setup_spacefighter() {
     music.setVolume(0.2);
     const explosionSound = new SoundEffect("music/explosion.mp3");
     
+    onPause(() => {
+        music.pause();
+    });
+    onResume(() => {
+        music.play();
+    });
+
     whenLoaded(() => {
         let player = playerClass.spawn(180, 320);
         player.enableWasdKeysMovement();

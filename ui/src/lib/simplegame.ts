@@ -31,6 +31,8 @@ let windowX = 0;
 let windowY = 0;
 
 let onLoadedWork : (()=>void)[] = [];
+let onPauseWork : (()=>void)[] = [];
+let onResumeWork : (()=>void)[] = [];
 
 let ticksPerSecond = 40;
 let canvas: HTMLCanvasElement;
@@ -185,8 +187,14 @@ function eventHandlerKeyDown(event : KeyboardEvent) {
             /* Pause */
             clearTimeout(gameLoopTimeout);
             gameLoopTimeout = -1;
+            for(const work of onPauseWork) {
+                work();
+            }
         } else {
             /* Unpause */
+            for(const work of onResumeWork) {
+                work();
+            }
             lastGameLoopTime = Date.now() - 1000/ticksPerSecond;
             mainGameLoop();
         }
@@ -391,6 +399,14 @@ function userInput() {
 
 export function whenLoaded(work : ()=>void) {
     onLoadedWork.push(work);
+}
+
+export function onPause(work : ()=>void) {
+    onPauseWork.push(work);
+}
+
+export function onResume(work : ()=>void) {
+    onResumeWork.push(work);
 }
 
 function doCollisionDetection() : CollisionDetector{
