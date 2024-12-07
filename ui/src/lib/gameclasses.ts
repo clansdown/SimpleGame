@@ -545,7 +545,7 @@ export class Text extends GameObject {
     }
 
     draw(ctx : CanvasRenderingContext2D) {
-        console.log("Drawing text", this.text);
+        // console.log("Drawing text", this.text);
         ctx.save();
         ctx.font = this.size + "px Arial, Helvetica, sans-serif";
         ctx.translate(this.x, this.y);

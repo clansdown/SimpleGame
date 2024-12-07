@@ -37,9 +37,15 @@ export class Music extends Sound {
     }
 }
 
-export class SoundEffect extends Sound {
+export class SoundEffect {
+    url : string;
+
     constructor(url : string) {
-        super(url);
-        this.setLoop(false);
+        this.url = url;
+    }
+
+    play() {
+        let audio = new Audio(this.url);
+        audio.play();
     }
 }

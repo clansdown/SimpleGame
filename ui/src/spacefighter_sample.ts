@@ -1,6 +1,7 @@
 import {  everyTick, getMousePosition, periodically, whenLoaded } from "./lib/simplegame";
 import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint } from "./lib/util";
+import { Music, SoundEffect } from "./lib/audio";
 
 export function setup_spacefighter() {
     const explosionClass = new EffectClass("explosion", "explosion.png", 300, 50, 100);
@@ -30,8 +31,9 @@ export function setup_spacefighter() {
         explosion.fateOutMillis = 150;
     });
 
-
-
+    const music = new Music("music/pachabel-canon.mp3");
+    const explosionSound = new SoundEffect("music/explosion.mp3");
+    
     whenLoaded(() => {
         let player = playerClass.spawn(180, 320);
         player.enableWasdKeysMovement();
@@ -54,6 +56,7 @@ export function setup_spacefighter() {
                 text.fadeInMillis = 100;
                 text.maxDurationMillis = 300;
                 text.fateOutMillis = 100;
+                explosionSound.play();
             });
         });
 
@@ -74,6 +77,8 @@ export function setup_spacefighter() {
                 centurion.move(40);
             });
         });
+
+        music.play();
     });
 
 
