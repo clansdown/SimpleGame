@@ -42,6 +42,8 @@ let notAllClassesAreLoaded : boolean = true;
 /** Mouse coordinates on the board */
 let mousePosition : Position2D = {x: 0, y: 0};
 
+let stillNeedInitialMouseClick : boolean = true;
+
 export class CollisionAction {
     sourceGameClass : GameObjectClass|null;
     sourceGameObject : GameObject|null;
@@ -116,6 +118,9 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
     /* Call the game's setup function */
     setup();
 
+    /* Draw the Click to begin screen */
+    drawClickToBegin();
+
     /* Kick off the main loop */
     lastGameLoopTime = Date.now();
     mainGameLoop();
@@ -127,21 +132,23 @@ function eventHandlerMouseMove(event : MouseEvent) {
 }
 
 function eventHandlerMouseDown(event : MouseEvent) {
-        // left mouse button
-        if(event.buttons & 1) {
-            let initial = keyMap.has('mouse1') ? !keyMap.get('mouse1') : true;
-            keyMap.set('mouse1', true);
-        }
-        // middle mouse button
-        if(event.buttons & 4) {
-            let initial = keyMap.has('mouse2') ? !keyMap.get('mouse2') : true;
-            keyMap.set('mouse2', true);
-        }
-        // right mouse button
-        if(event.buttons & 2) {
-            let initial = keyMap.has('mouse3') ? !keyMap.get('mouse3') : true;
-            keyMap.set('mouse3', true);
-        }
+    stillNeedInitialMouseClick = false;
+
+    // left mouse button
+    if(event.buttons & 1) {
+        let initial = keyMap.has('mouse1') ? !keyMap.get('mouse1') : true;
+        keyMap.set('mouse1', true);
+    }
+    // middle mouse button
+    if(event.buttons & 4) {
+        let initial = keyMap.has('mouse2') ? !keyMap.get('mouse2') : true;
+        keyMap.set('mouse2', true);
+    }
+    // right mouse button
+    if(event.buttons & 2) {
+        let initial = keyMap.has('mouse3') ? !keyMap.get('mouse3') : true;
+        keyMap.set('mouse3', true);
+    }
 }
 
 function eventHandlerMouseUp(event : MouseEvent) {
@@ -211,6 +218,12 @@ function allClassesLoaded() : boolean {
  * The main game loop
  */
 function mainGameLoop() {
+    /* Check for initial input */
+    if(stillNeedInitialMouseClick) {
+        gameLoopTimeout = setTimeout(mainGameLoop, 1000/ticksPerSecond);
+        return;
+    }
+
     /* Don't go through with the main loop until all game classes have loaded their resources */
     if(notAllClassesAreLoaded) {
         if(allClassesLoaded()) {
@@ -431,4 +444,14 @@ export function debug(text : string) {
 
 export function getMousePosition() : Position2D {
     return mousePosition;
+}
+
+function drawClickToBegin() {
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'white';
+    ctx.font = '30px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText("Click to Begin", canvas.width/2, canvas.height/2);
 }

@@ -31,7 +31,8 @@ export function setup_spacefighter() {
         explosion.fateOutMillis = 150;
     });
 
-    const music = new Music("music/pachabel-canon.mp3");
+    const music = new Music("music/pachelbel-canon.mp3");
+    music.setVolume(0.2);
     const explosionSound = new SoundEffect("music/explosion.mp3");
     
     whenLoaded(() => {
