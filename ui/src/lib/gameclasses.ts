@@ -235,9 +235,20 @@ export class GameObject {
         return [this.direction_x, this.direction_y];
     }
 
+    /**
+     * Moves the object by the given vector
+     */
     move(vector : vec2) {
         this.x += vector[0];
         this.y += vector[1];
+    }
+
+    /**
+     * Sets the new location of the object without any kind of movement, in absolute coordinates
+     */
+    setLocation(x : number, y : number) {
+        this.x = x;
+        this.y = y;
     }
 
     /**
