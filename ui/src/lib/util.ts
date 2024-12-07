@@ -21,6 +21,10 @@ export function generate_rotation_matrix(radians : number) : matrix2 {
     return [cos, -sin, sin, cos];
 }
 
+export function scaleVector(v : vec2, scale : number) : vec2 {
+    return [v[0] * scale, v[1] * scale];
+}
+
 export function dotProduct(v1 : vec2, v2 : vec2) : number {
     return v1[0] * v2[0] + v1[1] * v2[1];
 }

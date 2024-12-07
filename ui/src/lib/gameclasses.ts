@@ -1,5 +1,5 @@
 import { gameObjects, enemies, collisionActions, CollisionAction, boardWidth, boardHeight, players, projectiles, items } from "./simplegame";
-import type { Position2D } from "./util";
+import type { Position2D, vec2 } from "./util";
 
 export const gameClasses : GameObjectClass[] = [];
 
@@ -226,8 +226,18 @@ export class GameObject {
         this.direction_y = Math.sin(this.orientation - Math.PI/2);
     }
 
-    move(speed : number) {
+    /** Sets the speed */
+    setSpeed(speed : number) {
         this.velocity = speed;
+    }
+
+    getDirection() : vec2 {
+        return [this.direction_x, this.direction_y];
+    }
+
+    move(vector : vec2) {
+        this.x += vector[0];
+        this.y += vector[1];
     }
 
     /**
@@ -275,10 +285,10 @@ export class GameObject {
     /**
      * Internal function to handle drawing
      */
-    draw(ctx : CanvasRenderingContext2D) {
+    draw(ctx : CanvasRenderingContext2D, offsetX : number, offsetY : number) {
         ctx.save();
         /* Put it in the right place */
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.x - offsetX, this.y - offsetY);
         ctx.rotate(this.orientation);
 
         /* Grow In */
@@ -544,11 +554,11 @@ export class Text extends GameObject {
         this.text = text;
     }
 
-    draw(ctx : CanvasRenderingContext2D) {
+    draw(ctx : CanvasRenderingContext2D, offsetX : number, offsetY : number) {
         // console.log("Drawing text", this.text);
         ctx.save();
         ctx.font = this.size + "px Arial, Helvetica, sans-serif";
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.x - offsetX, this.y - offsetY);
         ctx.fillStyle = this.background;
         ctx.fillText(this.text, 0, 0);
         ctx.fillStyle = this.foreground;

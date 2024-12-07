@@ -1,5 +1,6 @@
 /* The game engine library */
 
+import { on } from 'svelte/events';
 import {setup} from '../game';
 import { CollisionDetector } from './collision';
 import { GameObject, gameClasses, type Enemy, type GameObjectClass, type Item, type Player, type Projectile } from './gameclasses';
@@ -19,7 +20,9 @@ const periodicWork : PeriodicWork[] = [];
 const keyMap = new Map<string, boolean>();
 const keyMapTimes = new Map<string, number>();
 export const collisionActions : CollisionAction[] = [];
-
+const onKeyDownMap = new Map<string, ()=>void>();
+const onKeyUpMap = new Map<string, ()=>void>();
+const keyEvents : KeyboardEvent[] = [];
 
 export let boardWidth = 10000;
 export let boardHeight = 10000;
@@ -45,6 +48,10 @@ let notAllClassesAreLoaded : boolean = true;
 let mousePosition : Position2D = {x: 0, y: 0};
 
 let stillNeedInitialMouseClick : boolean = true;
+
+let cameraFollowsPlayer : boolean = true;
+let maxCameraMovementPerSecond = 100;
+
 
 export class CollisionAction {
     sourceGameClass : GameObjectClass|null;
@@ -200,6 +207,8 @@ function eventHandlerKeyDown(event : KeyboardEvent) {
         }
 
     }
+
+    keyEvents.push(event);
     // console.log("Key Down: '" + event.key + "'", initial);
 }
 
@@ -211,6 +220,7 @@ function eventHandlerKeyUp(event : KeyboardEvent) {
     if(initial) {
         keyMapTimes.set(event.key, Date.now());
     }
+    keyEvents.push(event);
 }
 
 function allClassesLoaded() : boolean {
@@ -274,6 +284,9 @@ function mainGameLoop() {
         work.timeElapsed(delta_t);
     }
 
+    /* Update the camera */
+    updateCamera(delta_t);
+
     // draw
     draw();
 
@@ -283,6 +296,27 @@ function mainGameLoop() {
     const elapsed_time = Date.now() - start_time;
     const time_to_wait = (1000 / ticksPerSecond) - elapsed_time;
     gameLoopTimeout = setTimeout(mainGameLoop, time_to_wait);
+}
+
+function updateCamera(delta_t : number) {
+    if(cameraFollowsPlayer) {
+        if(players.length > 0) {
+            const player = players[0];
+            let x = player.x - windowWidth/2;
+            let y = player.y - windowHeight/2;
+            x = Math.max(0, Math.min(boardWidth - windowWidth, x));
+            y = Math.max(0, Math.min(boardHeight - windowHeight, y));
+            if(Math.abs(x - windowX) > delta_t*maxCameraMovementPerSecond) {
+                x = windowX + Math.sign(x - windowX)*delta_t*maxCameraMovementPerSecond;
+            }
+            if(Math.abs(y - windowY) > delta_t*maxCameraMovementPerSecond) {
+                y = windowY + Math.sign(y - windowY)*delta_t*maxCameraMovementPerSecond;
+            }
+            windowX = x;
+            windowY = y;
+            console.log("Camera at", windowX, windowY);
+        }
+    }
 }
 
 function updateDurations(delta_t : number) {
@@ -300,7 +334,7 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     for(const object of gameObjects) {
-        object.draw(ctx);
+        object.draw(ctx, windowX, windowY);
     }
 
 }
@@ -394,7 +428,23 @@ function userInput() {
             }
         }
     }
-
+   
+    /* Handle Key Events */
+    for(const event of keyEvents) {
+        const key = event.key;
+        if(event.type == 'keydown') {
+            const callback = onKeyDownMap.get(key);
+            if(callback) {
+                callback();
+            }
+        } else if(event.type == 'keyup') {
+            const callback = onKeyUpMap.get(key);
+            if(callback) {
+                callback();
+            }
+        }
+    }
+    keyEvents.length = 0;
 }
 
 export function whenLoaded(work : ()=>void) {
@@ -471,3 +521,24 @@ function drawClickToBegin() {
     ctx.textAlign = 'center';
     ctx.fillText("Click to Begin", canvas.width/2, canvas.height/2);
 }
+
+export function setCameraFollowsPlayer(follows : boolean) {
+    cameraFollowsPlayer = follows;
+}
+
+export function onKeyDown(key : string, callback : ()=>void) {
+    onKeyDownMap.set(key, callback);
+}
+
+export function onKeyUp(key : string, callback : ()=>void) {
+    onKeyUpMap.set(key, callback);
+}
+
+export function onButtonDown(button : number, callback : ()=>void) {
+    
+}
+
+export function onButtonUp(button : number, callback : ()=>void) {
+    
+}
+

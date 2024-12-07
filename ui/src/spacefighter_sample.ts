@@ -1,6 +1,6 @@
-import {  everyTick, getMousePosition, onPause, onResume, periodically, whenLoaded } from "./lib/simplegame";
+import {  everyTick, getMousePosition, onKeyUp, onPause, onResume, periodically, whenLoaded } from "./lib/simplegame";
 import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
-import { midpoint } from "./lib/util";
+import { midpoint, scaleVector } from "./lib/util";
 import { Music, SoundEffect } from "./lib/audio";
 
 export function setup_spacefighter() {
@@ -42,9 +42,15 @@ export function setup_spacefighter() {
         music.play();
     });
 
+
+
     whenLoaded(() => {
         let player = playerClass.spawn(180, 320);
         player.enableWasdKeysMovement();
+        onKeyUp(" ", () => {
+            player.move(scaleVector(player.getDirection(), 400));
+        });
+    
 
         everyTick(() => {
             player.setOrientationTowards(getMousePosition());
@@ -73,7 +79,7 @@ export function setup_spacefighter() {
             let peon = peonClass.spawn(1000*Math.random(), 1000*Math.random());
             everyTick(() => {
                 peon.setOrientationTowards(player);
-                peon.move(80);
+                peon.setSpeed(80);
             });
         });
 
@@ -82,7 +88,7 @@ export function setup_spacefighter() {
             console.log("centurion spawned with " + centurion.hitpoints + " hitpoints");
             everyTick(() => {
                 centurion.setOrientationTowards(player);
-                centurion.move(40);
+                centurion.setSpeed(40);
             });
         });
 
