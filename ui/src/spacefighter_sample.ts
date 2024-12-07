@@ -43,7 +43,8 @@ export function setup_spacefighter() {
         periodically(0.5, () => {
             let shot = playerShotClass.spawnAt(player);
             shot.onCollisionWithEnemy((e : GameObject) => {
-                let explosion = playerShotExplosionClass.spawnAt(midpoint(shot, e));
+                //let explosion = playerShotExplosionClass.spawnAt(midpoint(shot, e));
+                let explosion = playerShotExplosionClass.spawnAt(shot);
                 explosion.width = 30;
                 explosion.height = 30;
                 shot.destroy();
