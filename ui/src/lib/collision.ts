@@ -70,7 +70,12 @@ class TreeNode {
             const current_children = this.objects||[];
             this.objects = null;
             for(const obj of current_children) {
-                this.insertIntoChildNodes(obj);
+                try {
+                    this.insertIntoChildNodes(obj);
+                } catch(e) {
+                    console.log("Error inserting ", obj, " into ", this);
+                    console.log(e);
+                }
             }
             this.quadrantsAllocated = true;
         }
@@ -85,7 +90,7 @@ class TreeNode {
         /* First, figure out which quadrant each corner of the hitbox is in: */
         const quadrants : number[] = [0, 0, 0, 0];
         for(let i = 0; i < 4; i++) {
-            if(object.hitbox[i * 2] >= this.x) {
+            if(object.hitbox[i * 2] <= this.x) {
                 if(object.hitbox[i * 2 + 1] >= this.y) {
                     quadrants[0] = 0;
                 } else {
