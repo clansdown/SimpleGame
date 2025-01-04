@@ -1,4 +1,4 @@
-import {  everyTick, getMousePosition, onKeyUp, onPause, onResume, periodically, whenLoaded } from "./lib/simplegame";
+import {  everyTick, getMousePosition, onKeyUp, onPause, onResume, periodically, setBackground, whenLoaded } from "./lib/simplegame";
 import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint, scaleVector } from "./lib/util";
 import { Music, SoundEffect } from "./lib/audio";
@@ -42,6 +42,7 @@ export function setup_spacefighter() {
         music.play();
     });
 
+    setBackground(["background-1.png", "background-2.png", "background-3.png"]);
 
 
     whenLoaded(() => {

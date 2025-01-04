@@ -52,6 +52,7 @@ let stillNeedInitialMouseClick : boolean = true;
 let cameraFollowsPlayer : boolean = true;
 let maxCameraMovementPerSecond = 100;
 
+let backgroundTileset : HTMLImageElement[] = [];
 
 export class CollisionAction {
     sourceGameClass : GameObjectClass|null;
@@ -333,11 +334,35 @@ function draw() {
     ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    /* Background */
+    if(backgroundTileset.length > 0) {
+        const tileWidth = backgroundTileset[0].width;
+        const tileHeight = backgroundTileset[0].height;
+
+        const base_x = Math.floor(windowX/tileWidth)*tileWidth;
+        const base_y = Math.floor(windowY/tileHeight)*tileHeight;
+
+        for(let x = base_x; x <= base_x + windowWidth + tileWidth; x += tileWidth) {
+            for(let y = base_y; y <= base_y + windowHeight + tileHeight; y += tileHeight) {
+                const img = backgroundTileset[Math.floor(randFromCoordinates(Math.floor(x/tileWidth), Math.floor(y/tileWidth))*backgroundTileset.length)];
+                ctx.drawImage(img, x-windowX, y-windowY);
+            }
+        }
+    }
+
+    /* Objects */
     for(const object of gameObjects) {
         object.draw(ctx, windowX, windowY);
     }
 
 }
+
+function randFromCoordinates(x : number, y : number) : number {
+    const hash = x*123456789 + y*987654321;
+    let rand = Math.sin(hash)*100000;
+    return rand - Math.floor(rand);
+}
+
 
 function moveObjects(delta_t : number) {
     for(const object of gameObjects) {
@@ -542,3 +567,23 @@ export function onButtonUp(button : number, callback : ()=>void) {
     
 }
 
+/**
+ * Sets the background to be one or more tiles (they must be the same size) given by file names
+ * If there is more than one, the tiles will be randomly selected for their locations in the backgrounds so that
+ * there won't be a repetition pattern in the tiling. The larger the number of tiles, the better the effect will be.
+ */
+export function setBackground(tiles: string[], whenLoaded: ()=>void = ()=>{}) {
+    const images : HTMLImageElement[] = [];
+    let count_unloaded = tiles.length;
+    for(const tile of tiles) {
+        const img = new Image();
+        img.src = tile;
+        images.push(img);
+        img.onload = () => {
+            if(--count_unloaded <= 0) {
+                backgroundTileset = images;
+                whenLoaded();
+            }
+        };
+    }
+}
