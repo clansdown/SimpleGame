@@ -244,7 +244,7 @@ export class GameObject {
     }
 
     /**
-     * Sets the new location of the object without any kind of movement, in absolute coordinates
+     * Sets the new location of the object without any kind of movement, in absolute coordinatesr
      */
     setLocation(x : number, y : number) {
         this.x = x;
