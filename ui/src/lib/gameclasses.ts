@@ -477,6 +477,17 @@ export class ItemClass extends GameObjectClass {
         const item = new Item(this, x, y);
         items.add(item);
         gameObjects.add(item);
+        super.spawned(item);
+        return item;
+    }
+
+    spawnAt(gameObject: GameObject) : Item {
+        const item = new Item(this, gameObject.x, gameObject.y);
+        item.speed = this.defaultSpeed;
+        item.velocity = item.speed;
+        items.add(item);
+        gameObjects.add(item);
+        super.spawned(item);
         return item;
     }
 }

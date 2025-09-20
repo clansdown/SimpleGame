@@ -340,5 +340,15 @@ export class CollisionDetector {
     getCollisionObjects() : Iterable<CollisionObject> {
         return this.objectCache.values();
     }
+
+    /**
+     * Checks if two specific GameObjects collide
+     */
+    collides(obj1: GameObject, obj2: GameObject): boolean {
+        const collisionObj1 = this.getCollisionObject(obj1);
+        const collisionObj2 = this.getCollisionObject(obj2);
+        return collides(collisionObj1, collisionObj2);
+    }
+
 }
 

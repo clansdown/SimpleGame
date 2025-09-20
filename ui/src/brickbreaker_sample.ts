@@ -1,5 +1,5 @@
 import { everyTick, getMousePosition, onKeyDown, onKeyUp, onPause, onResume, periodically, setBackground, setBoardSize, whenLoaded } from "./lib/simplegame";
-import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, PlayerClass, ProjectileClass } from "./lib/gameclasses";
+import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, ItemClass, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint, scaleVector } from "./lib/util";
 import { Music, SoundEffect } from "./lib/audio";
 
@@ -7,7 +7,7 @@ export function setup_brickbreaker() {
     setBoardSize(1000, 1000);
 
     // Define game classes
-    const ballClass = new ProjectileClass("ball", "ball-1.png");
+    const ballClass = new ItemClass("ball", "ball-1.png");
     ballClass.setDefaultSpeed(300);
     ballClass.defaultWidth = 30;
     ballClass.defaultHeight = 30;
@@ -96,9 +96,11 @@ export function setup_brickbreaker() {
             bricks = bricks.filter(b => b !== enemy);
         });
 
-        ball.onCollisionWith(paddleClass, (paddleObj: GameObject) => {
+        ball.onCollisionWithParticular(paddle, (paddleObj: GameObject) => {
             // Collision with paddle
+            console.log("Ball hit paddle");
             ball.direction_y *= -1;
+
             bounceSound.play();
         });
 
