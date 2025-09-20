@@ -53,8 +53,8 @@ export function setup_brickbreaker() {
         paddle.speed = 400;
 
         // Create ball
-        ball = ballClass.spawnAt(paddle);
-        ball.setOrientationRadians(0); // Up
+        ball = ballClass.spawn(paddle.x, paddle.y - 50);
+        ball.setOrientation(-90); // Up
         ball.velocity = ball.speed;
 
         // Create bricks
@@ -98,7 +98,7 @@ export function setup_brickbreaker() {
 
         ball.onCollisionWithParticular(paddle, (paddleObj: GameObject) => {
             // Collision with paddle
-            console.log("Ball hit paddle");
+            console.log("Ball hit paddle!");
             ball.direction_y *= -1;
 
             bounceSound.play();
