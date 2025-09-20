@@ -1,4 +1,4 @@
-import { everyTick, getMousePosition, onKeyDown, onKeyUp, onPause, onResume, periodically, setBackground, setBoardSize, whenLoaded } from "./lib/simplegame";
+import { everyTick, getMousePosition, onKeyDown, onKeyUp, onPause, onResume, periodically, setBackground, setBoardSize, whenLoaded, boardWidth } from "./lib/simplegame";
 import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, ItemClass, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint, scaleVector } from "./lib/util";
 import { Music, SoundEffect } from "./lib/audio";
@@ -64,12 +64,16 @@ export function setup_brickbreaker() {
         const vGap = 1;
         const startX = 10;
         const startY = 10;
+        // Compute how many bricks fit per row based on available board width and the widest brick
+        const maxBrickWidth = Math.max(...brickClasses.map(bc => bc.defaultWidth || 0));
+        const availableWidth = boardWidth - startX - startX;
+        const bricksPerRow = Math.max(1, Math.floor((availableWidth + hGap) / (maxBrickWidth + hGap)));
 
         let yCursor = startY;
-        for (let row = 0; row < 5; row++) {
+        for (let row = 0; row < 8; row++) {
             let xCursor = startX;
             let rowMaxHeight = 0;
-            for (let col = 0; col < 10; col++) {
+            for (let col = 0; col < bricksPerRow; col++) {
                 const brickClass = brickClasses[Math.floor(Math.random() * brickClasses.length)];
                 // Spawn first, then use the actual object's width/height
                 const brick = brickClass.spawn(0, 0);
