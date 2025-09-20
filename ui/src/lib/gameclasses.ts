@@ -195,6 +195,7 @@ export class GameObject {
         this.hitboxXOffset = gameclass.hitboxXOffset;
         this.hitboxYOffset = gameclass.hitboxYOffset;
         this.orientation = 0;
+        this.speed = gameclass.defaultSpeed;
     }
 
     /**

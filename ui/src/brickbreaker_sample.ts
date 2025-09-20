@@ -8,17 +8,18 @@ export function setup_brickbreaker() {
 
     // Define game classes
     const ballClass = new ItemClass("ball", "ball-1.png");
-    ballClass.setDefaultSpeed(300);
+    ballClass.setDefaultSpeed(800);
     ballClass.defaultWidth = 30;
     ballClass.defaultHeight = 30;
 
     const paddleClass = new PlayerClass("paddle", "paddle-1.png");
-    paddleClass.setBoundingBox(100, 20);
+    
 
     const brickClasses: EnemyClass[] = [];
     for (let i = 1; i <= 6; i++) {
         const brickClass = new EnemyClass(`brick${i}`, `brick-${i}.png`, 1);
-        brickClass.setBoundingBox(80, 40);
+        brickClass.defaultWidth = 80;
+        brickClass.defaultHeight = 30;
         brickClasses.push(brickClass);
     }
 
@@ -34,7 +35,7 @@ export function setup_brickbreaker() {
     onResume(() => music.play());
 
     // Background
-    setBackground(["background-1.png"]);
+    setBackground(["background-1.png", "background-2.png", "background-3.png"]);
 
     // Game state
     let score = 0;
@@ -58,12 +59,30 @@ export function setup_brickbreaker() {
         ball.velocity = ball.speed;
 
         // Create bricks
+        // Lay bricks using each brick's actual dimensions so they don't overlap
+        const hGap = 1;
+        const vGap = 1;
+        const startX = 10;
+        const startY = 10;
+
+        let yCursor = startY;
         for (let row = 0; row < 5; row++) {
+            let xCursor = startX;
+            let rowMaxHeight = 0;
             for (let col = 0; col < 10; col++) {
                 const brickClass = brickClasses[Math.floor(Math.random() * brickClasses.length)];
-                const brick = brickClass.spawn(100 + col * 90, 100 + row * 50);
+                // Spawn first, then use the actual object's width/height
+                const brick = brickClass.spawn(0, 0);
+                const brickWidth = brick.width;
+                const brickHeight = brick.height;
+                const x = xCursor + brickWidth / 2;
+                const y = yCursor + brickHeight / 2;
+                brick.setLocation(x, y);
                 bricks.push(brick);
+                xCursor += brickWidth + hGap;
+                rowMaxHeight = Math.max(rowMaxHeight, brickHeight);
             }
+            yCursor += rowMaxHeight + vGap;
         }
 
         // UI Text
@@ -128,7 +147,7 @@ export function setup_brickbreaker() {
                 }
                 // Reset ball
                 ball.setLocation(paddle.x, paddle.y - 50);
-                ball.setOrientationRadians(-Math.PI / 2);
+                ball.setOrientation(-90);
                 ball.velocity = ball.speed;
             }
 
