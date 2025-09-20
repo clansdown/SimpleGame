@@ -588,3 +588,8 @@ export function setBackground(tiles: string[], whenLoaded: ()=>void = ()=>{}) {
         };
     }
 }
+
+export function setBoardSize(width : number, height : number) {
+    boardWidth = width;
+    boardHeight = height;
+}

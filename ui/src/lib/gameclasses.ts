@@ -36,8 +36,10 @@ export class GameObjectClass {
         if(image_file) {
             this.image = new Image();
             this.image.onload = () => {
-                this.defaultWidth = this.image.width;
-                this.defaultHeight = this.image.height;
+                if(this.defaultWidth == 0)
+                    this.defaultWidth = this.image.width;
+                if(this.defaultHeight == 0)
+                    this.defaultHeight = this.image.height;
                 if(this.hitboxWidth == 0)
                     this.hitboxWidth = this.defaultWidth;
                 if(this.hitboxHeight == 0)
@@ -150,7 +152,7 @@ export class GameObject {
     orientation : number;
     /** The x component of the orientation, to make movement computation more efficient */
     direction_x : number = 0;
-    /** The x component of the orientation, to make movement computation more efficient */
+    /** The y component of the orientation, to make movement computation more efficient */
     direction_y : number = 1;
 
     /** The current speed in the direction of travel */
