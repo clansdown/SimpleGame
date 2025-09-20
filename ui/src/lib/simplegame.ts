@@ -503,8 +503,11 @@ function doCollisionDetection() : CollisionDetector{
                 }
             }
             if(action.targetGameObject) {
-                // Just directly check if they collide
-
+                // Check if the specific objects collide using the detector
+                const detector = new CollisionDetector(boardWidth, boardHeight);
+                if(detector.collides(action.sourceGameObject, action.targetGameObject)) {
+                    action.work(action.sourceGameObject, action.targetGameObject);
+                }
             }
         }
 
