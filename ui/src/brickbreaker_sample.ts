@@ -2,6 +2,7 @@ import { everyTick, getMousePosition, onKeyDown, onKeyUp, onPause, onResume, per
 import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, ItemClass, Player, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint, scaleVector } from "./lib/util";
 import { Music, SoundEffect } from "./lib/audio";
+import { CollisionDetector } from "./lib/collision";
 
 export function setup_brickbreaker() {
     setBoardSize(1000, 1000);
@@ -210,6 +211,8 @@ export function setup_brickbreaker() {
         const new_angle_radians = reflected_angle_radians + offset_radians;
         ball.setOrientationRadians(new_angle_radians);
         ball.velocity = ball.speed;
+        // Move the ball directly above the paddle without overlapping
+        ball.y = paddle.y - paddle.height / 2 - ball.height / 2;
         bounceSound.play();
     }
 }
