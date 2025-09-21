@@ -372,8 +372,8 @@ export class Player extends GameObject {
         let norm = Math.sqrt(normalized_x_speed*normalized_x_speed + normalized_y_speed*normalized_y_speed);
         if(norm < 1)
             norm = 1;
-        // console.log(this.gameclass.name,  this.x, this.y, this.x_speed, this.y_speed, "norm:", norm, "delta_t:", delta_t);
-        // console.log("adding ", delta_t*(this.x_speed/norm), delta_t*(this.y_speed/norm));
+        console.log(this.gameclass.name,  this.x, this.y, this.x_speed, this.y_speed, "norm:", norm, "delta_t:", delta_t);
+         console.log("adding ", delta_t*(this.x_speed/norm), delta_t*(this.y_speed/norm));
         this.x += delta_t*(this.x_speed/norm);
         this.y += delta_t*(this.y_speed/norm);
         if(this.x < 0)
@@ -394,6 +394,13 @@ export class Player extends GameObject {
     }
     enableLeftTouchscreenMovement() {
         this.touchscreen = true;
+    }
+
+    setSpeedX(speed : number) {
+        this.x_speed = speed;
+    }
+    setSpeedY(speed : number) {
+        this.y_speed = speed;
     }
 }
 

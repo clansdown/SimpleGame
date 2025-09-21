@@ -1,5 +1,5 @@
 import { everyTick, getMousePosition, onKeyDown, onKeyUp, onPause, onResume, periodically, setBackground, setBoardSize, whenLoaded, boardWidth } from "./lib/simplegame";
-import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, ItemClass, PlayerClass, ProjectileClass } from "./lib/gameclasses";
+import { createText, Effect, EffectClass, Enemy, EnemyClass, GameObject, ItemClass, Player, PlayerClass, ProjectileClass } from "./lib/gameclasses";
 import { midpoint, scaleVector } from "./lib/util";
 import { Music, SoundEffect } from "./lib/audio";
 
@@ -13,7 +13,7 @@ export function setup_brickbreaker() {
     ballClass.defaultHeight = 30;
 
     const paddleClass = new PlayerClass("paddle", "paddle-1.png");
-    
+    paddleClass.defaultSpeed = 800;
 
     const brickClasses: EnemyClass[] = [];
     for (let i = 1; i <= 6; i++) {
@@ -47,11 +47,11 @@ export function setup_brickbreaker() {
     let livesText: any = null;
     let gameOver = false;
 
+
     whenLoaded(() => {
         // Create paddle
         paddle = paddleClass.spawn(500, 950);
-        // paddle.enableArrowKeysMovement();
-        paddle.speed = 400;
+        paddle.speed = 1600;
 
         // Create ball
         ball = ballClass.spawn(paddle.x, paddle.y - 50);
@@ -120,11 +120,7 @@ export function setup_brickbreaker() {
         });
 
         ball.onCollisionWithParticular(paddle, (paddleObj: GameObject) => {
-            // Collision with paddle
-            console.log("Ball hit paddle!");
-            ball.direction_y *= -1;
-
-            bounceSound.play();
+            collide_ball_with_paddle(ball, paddle);
         });
 
         // Ball movement and collision
@@ -165,11 +161,45 @@ export function setup_brickbreaker() {
         // Paddle movement
         everyTick(() => {
             if (gameOver) return;
-            // Paddle follows mouse horizontally
-            const mousePos = getMousePosition();
-            paddle.setLocation(mousePos.x, paddle.y);
+            move_paddle(paddle);
         });
 
         music.play();
     });
+    
+    function move_paddle(paddle: Player) {
+        // Paddle moves towards mouse horizontally with velocity
+        const mousePos = getMousePosition();
+        const deltaX = mousePos.x - paddle.x;
+        // console.log(`Paddle at ${paddle.x}, mouse at ${mousePos.x}, deltaX=${deltaX}`);
+        if (deltaX > 0) {
+            paddle.direction_x = 1;
+            paddle.setSpeedX(paddle.speed *Math.min(1, deltaX/200)); // Scale velocity towards mouse
+        } else if (deltaX < 0) {
+            paddle.direction_x = -1;
+            paddle.setSpeedX(paddle.speed * Math.max(-1, deltaX/200)); // Scale velocity towards mouse
+        } else {
+            paddle.velocity = 0;
+        }
+        
+        // Check if paddle is against the side in the direction of orientation and stop velocity
+        if (paddle.direction_x > 0 && paddle.x + paddle.width / 2 >= 1000) {
+            paddle.velocity = 0;
+            paddle.x_speed = 0;
+        } else if (paddle.direction_x < 0 && paddle.x - paddle.width / 2 <= 0) {
+            paddle.velocity = 0;
+            paddle.x_speed = 0;
+        }
+    }
+    
+    function collide_ball_with_paddle(ball: any, paddle: any) {
+        const max_offset_degrees = 45;
+        const fraction = paddle.x_speed / paddle.speed;
+        const offset_degrees = fraction * max_offset_degrees;
+        const base_angle_degrees = -90;
+        const new_angle_degrees = base_angle_degrees + offset_degrees;
+        ball.setOrientation(new_angle_degrees);
+        ball.velocity = ball.speed;
+        bounceSound.play();
+    }
 }

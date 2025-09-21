@@ -373,6 +373,9 @@ function moveObjects(delta_t : number) {
 function userInput() {
     const now = Date.now();
     for(const player of players) {
+        if(!player.arrowKeys && !player.wasdKeys && !player.touchscreen) {
+            continue;
+        }
         const p_accel = player.acceleration*1000;
         let key_pressed = false;
         let up = false;
