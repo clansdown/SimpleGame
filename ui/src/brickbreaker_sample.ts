@@ -196,9 +196,19 @@ export function setup_brickbreaker() {
         const max_offset_degrees = 45;
         const fraction = paddle.x_speed / paddle.speed;
         const offset_degrees = fraction * max_offset_degrees;
-        const base_angle_degrees = -90;
-        const new_angle_degrees = base_angle_degrees + offset_degrees;
-        ball.setOrientation(new_angle_degrees);
+        // Get current direction
+        let reflected_dx = ball.direction_x;
+        let reflected_dy = ball.direction_y;
+        // Reflect on x-axis if going down (positive y direction)
+        if (ball.direction_y > 0) {
+            reflected_dy = -reflected_dy;
+        }
+        // Compute the reflected orientation
+        const reflected_angle_radians = Math.atan2(reflected_dy, reflected_dx) + Math.PI / 2;
+        // Modify the reflected orientation by the offset
+        const offset_radians = offset_degrees * (Math.PI / 180);
+        const new_angle_radians = reflected_angle_radians + offset_radians;
+        ball.setOrientationRadians(new_angle_radians);
         ball.velocity = ball.speed;
         bounceSound.play();
     }
