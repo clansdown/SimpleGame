@@ -95,30 +95,7 @@ export function setup_brickbreaker() {
         livesText = createText(`Lives: ${lives}`, { x: 800, y: 50 });
 
         // Set up collision handlers for ball
-        ball.onCollisionWithEnemy((enemy: Enemy) => {
-            // Collision with brick (enemy)
-            // Compute reflection
-            const dx = ball.x - enemy.x;
-            const dy = ball.y - enemy.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist === 0) return; // Avoid division by zero, though unlikely
-            const n_x = dx / dist;
-            const n_y = dy / dist;
-            const dot = ball.direction_x * n_x + ball.direction_y * n_y;
-            const reflected_x = ball.direction_x - 2 * dot * n_x;
-            const reflected_y = ball.direction_y - 2 * dot * n_y;
-            const angle = Math.atan2(reflected_y, reflected_x) + Math.PI / 2;
-            ball.setOrientationRadians(angle);
-            
-            enemy.takeDamage(1);
-            score += 10;
-            scoreText.text = `Score: ${score}`;
-            breakSound.play();
-            const explosion = explosionClass.spawnAt(enemy);
-            explosion.width = 80;
-            explosion.height = 40;
-            bricks = bricks.filter(b => b !== enemy);
-        });
+        ball.onCollisionWithEnemy(collide_ball_with_brick);
 
         ball.onCollisionWithParticular(paddle, (paddleObj: GameObject) => {
             collide_ball_with_paddle(ball, paddle);
@@ -214,5 +191,30 @@ export function setup_brickbreaker() {
         // Move the ball directly above the paddle without overlapping
         ball.y = paddle.y - paddle.height / 2 - ball.height / 2;
         bounceSound.play();
+    }
+
+    function collide_ball_with_brick(enemy: Enemy) {
+        // Collision with brick (enemy)
+        // Compute reflection
+        const dx = ball.x - enemy.x;
+        const dy = ball.y - enemy.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist === 0) return; // Avoid division by zero, though unlikely
+        const n_x = dx / dist;
+        const n_y = dy / dist;
+        const dot = ball.direction_x * n_x + ball.direction_y * n_y;
+        const reflected_x = ball.direction_x - 2 * dot * n_x;
+        const reflected_y = ball.direction_y - 2 * dot * n_y;
+        const angle = Math.atan2(reflected_y, reflected_x) + Math.PI / 2;
+        ball.setOrientationRadians(angle);
+        
+        enemy.takeDamage(1);
+        score += 10;
+        scoreText.text = `Score: ${score}`;
+        breakSound.play();
+        const explosion = explosionClass.spawnAt(enemy);
+        explosion.width = 80;
+        explosion.height = 40;
+        bricks = bricks.filter(b => b !== enemy);
     }
 }
