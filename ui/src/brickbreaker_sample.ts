@@ -94,7 +94,7 @@ export function setup_brickbreaker() {
         livesText = createText(`Lives: ${lives}`, { x: 800, y: 50 });
 
         // Set up collision handlers for ball
-        ball.onCollisionWithEnemy((enemy: GameObject) => {
+        ball.onCollisionWithEnemy((enemy: Enemy) => {
             // Collision with brick (enemy)
             // Compute reflection
             const dx = ball.x - enemy.x;
@@ -109,7 +109,7 @@ export function setup_brickbreaker() {
             const angle = Math.atan2(reflected_y, reflected_x) + Math.PI / 2;
             ball.setOrientationRadians(angle);
             
-            (enemy as Enemy).takeDamage(1);
+            enemy.takeDamage(1);
             score += 10;
             scoreText.text = `Score: ${score}`;
             breakSound.play();
