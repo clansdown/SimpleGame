@@ -15,6 +15,9 @@ export function setup_brickbreaker() {
 
     const paddleClass = new PlayerClass("paddle", "paddle-1.png");
     paddleClass.defaultSpeed = 800;
+    paddleClass.defaultWidth = 150;
+    paddleClass.defaultHeight = 30;
+
 
     const brickClasses: EnemyClass[] = [];
     for (let i = 1; i <= 6; i++) {
