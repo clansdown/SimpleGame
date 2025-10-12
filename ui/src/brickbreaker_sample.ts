@@ -195,9 +195,15 @@ export function setup_brickbreaker() {
 
     function collide_ball_with_brick(enemy: Enemy) {
         // Collision with brick (enemy)
-        // Compute reflection
-        const dx = ball.x - enemy.x;
-        const dy = ball.y - enemy.y;
+        // Compute reflection based on the closest point on the brick to the ball center
+        const left = enemy.x - enemy.width / 2;
+        const right = enemy.x + enemy.width / 2;
+        const top = enemy.y - enemy.height / 2;
+        const bottom = enemy.y + enemy.height / 2;
+        const closest_x = Math.max(left, Math.min(ball.x, right));
+        const closest_y = Math.max(top, Math.min(ball.y, bottom));
+        const dx = ball.x - closest_x;
+        const dy = ball.y - closest_y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist === 0) return; // Avoid division by zero, though unlikely
         const n_x = dx / dist;
