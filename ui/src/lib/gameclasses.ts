@@ -142,6 +142,8 @@ export class GameObject {
     /** Where users should hang their variables, e.g. var.hp, var.level, var.numberOfPowerUps, etc. */
     var : any = {};
 
+    attachedObjects : AttachedGameObject[] = [];
+
     /** The maximum speed the object can go */
     speed : number = 200;
     x_speed : number = 0;
@@ -205,19 +207,27 @@ export class GameObject {
         this.maxDurationMillis = millis;
     }
 
+    private updateAttached() {
+        for (const attached of this.attachedObjects) {
+            attached.update(this);
+        }
+    }
+
     /**
      * Sets the orientation in degrees
      */
     setOrientation(angle : number) {
         this.orientation = Math.PI*angle/180;
-        this.direction_x = Math.cos(this.orientation);
-        this.direction_y = Math.sin(this.orientation);
+        this.direction_x = Math.cos(this.orientation - Math.PI/2);
+        this.direction_y = Math.sin(this.orientation - Math.PI/2);
+        this.updateAttached();
     }
 
     setOrientationRadians(angle : number) {
         this.orientation = angle;
         this.direction_x = Math.cos(this.orientation - Math.PI/2);
         this.direction_y = Math.sin(this.orientation - Math.PI/2);
+        this.updateAttached();
     }
 
     setOrientationTowards(pos : Position2D) {
@@ -227,6 +237,7 @@ export class GameObject {
         // debug("Setting orientation towards " + pos.x + ", " + pos.y + " from " + this.x + ", " + this.y + " to " + this.orientation);
         this.direction_x = Math.cos(this.orientation - Math.PI/2);
         this.direction_y = Math.sin(this.orientation - Math.PI/2);
+        this.updateAttached();
     }
 
     /** Sets the speed */
@@ -244,6 +255,7 @@ export class GameObject {
     move(vector : vec2) {
         this.x += vector[0];
         this.y += vector[1];
+        this.updateAttached();
     }
 
     /**
@@ -252,6 +264,7 @@ export class GameObject {
     setLocation(x : number, y : number) {
         this.x = x;
         this.y = y;
+        this.updateAttached();
     }
 
     /**
@@ -276,6 +289,7 @@ export class GameObject {
                 this.destroy();
             }
         }
+        this.updateAttached();
     }
 
     takeDamage(amount : number) {
@@ -352,6 +366,18 @@ class AttachedGameObject {
         this.offsetY = offsetY;
         this.orientationOffset = orientationOffset;
     }
+
+    update(parent : GameObject) {
+        const cos = Math.cos(parent.orientation);
+        const sin = Math.sin(parent.orientation);
+        const rotatedX = this.offsetX * cos - this.offsetY * sin;
+        const rotatedY = this.offsetX * sin + this.offsetY * cos;
+        this.gameObject.x = parent.x + rotatedX;
+        this.gameObject.y = parent.y + rotatedY;
+        this.gameObject.orientation = parent.orientation + this.orientationOffset;
+        this.gameObject.direction_x = Math.cos(this.gameObject.orientation - Math.PI/2);
+        this.gameObject.direction_y = Math.sin(this.gameObject.orientation - Math.PI/2);
+    }
 }
 
 export class PlayerClass extends GameObjectClass {
@@ -397,6 +423,7 @@ export class Player extends GameObject {
             this.y = 0;
         if(this.y > boardHeight)
             this.y = boardHeight;
+        this.updateAttached();
     }
 
     enableArrowKeysMovement() {
