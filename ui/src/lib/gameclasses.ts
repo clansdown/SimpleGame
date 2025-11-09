@@ -268,6 +268,21 @@ export class GameObject {
     }
 
     /**
+     * Attaches another GameObject to this one with the specified offsets and orientation offset.
+     */
+    attach(gameObject: GameObject, offsetX: number, offsetY: number, orientationOffset: number) {
+        const attached = new AttachedGameObject(gameObject, offsetX, offsetY, orientationOffset);
+        this.attachedObjects.push(attached);
+    }
+
+    /**
+     * Detaches the specified GameObject from this one.
+     */
+    detach(gameObject: GameObject) {
+        this.attachedObjects = this.attachedObjects.filter(attached => attached.gameObject !== gameObject);
+    }
+
+    /**
      * Internal function to move the object
      */
     doMovement(delta_t : number) {
