@@ -438,7 +438,6 @@ export class Player extends GameObject {
             this.y = 0;
         if(this.y > boardHeight)
             this.y = boardHeight;
-        this.updateAttached();
     }
 
     enableArrowKeysMovement() {
