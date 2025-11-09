@@ -340,6 +340,19 @@ export class GameObject {
     }
 }
 
+class AttachedGameObject {
+    gameObject : GameObject
+    offsetX : number;
+    offsetY : number;
+    orientationOffset : number;
+
+    constructor(gameObject : GameObject, offsetX : number, offsetY : number, orientationOffset : number) {
+        this.gameObject = gameObject;
+        this.offsetX = offsetX;
+        this.offsetY = offsetY;
+        this.orientationOffset = orientationOffset;
+    }
+}
 
 export class PlayerClass extends GameObjectClass {
     static rootPlayerClass : PlayerClass = new PlayerClass("root", null);
