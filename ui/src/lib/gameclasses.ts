@@ -173,6 +173,9 @@ export class GameObject {
     /** Whether this object should be maximized in the y direction within its container */
     maximizeY : boolean = false;
 
+    /** The object this is attached to, if any */
+    attachedTo : GameObject|null = null;
+
     gameclass : GameObjectClass;
 
     fadeInMillis : number = 0;
@@ -280,6 +283,7 @@ export class GameObject {
     attach(gameObject: GameObject, offsetX: number, offsetY: number, orientationOffset: number) {
         const attached = new AttachedGameObject(gameObject, offsetX, offsetY, orientationOffset);
         this.attachedObjects.push(attached);
+        gameObject.attachedTo = this;
     }
 
     /**
@@ -287,12 +291,17 @@ export class GameObject {
      */
     detach(gameObject: GameObject) {
         this.attachedObjects = this.attachedObjects.filter(attached => attached.gameObject !== gameObject);
+        gameObject.attachedTo = null;
     }
 
     /**
      * Internal function to move the object
      */
     doMovement(delta_t : number) {
+        // Attached objects don't move independently
+        if (this.attachedTo) {
+            return;
+        }
         this.x += this.direction_x*this.velocity*delta_t;
         this.y += this.direction_y*this.velocity*delta_t;
         // console.log(this.gameclass.name, this.x, this.y, this.direction_x, this.direction_y, this.velocity, delta_t);
