@@ -30,7 +30,7 @@ export class GameObjectClass {
     // TODO: implement the idea of inheritance, so it is possible to create a child class of a GameObjectClass; this will have implications for other
     // things in the system like collision trees
 
-    constructor(name : string, image_file : string|null, parent : GameObjectClass, hitpoints : number = 1) {
+    constructor(name : string, image_file : string|null, parent : GameObjectClass|null, hitpoints : number = 1) {
         this.name = name;
         this.defaultHitpoints = hitpoints;
         if(image_file) {
@@ -165,6 +165,13 @@ export class GameObject {
     destroyIfOffBoard : boolean = false;
 
     standardMovement : boolean = true;
+
+    /** Whether this object can be resized by parent layout containers */
+    layoutCanResizeMe : boolean = true;
+    /** Whether this object should be maximized in the x direction within its container */
+    maximizeX : boolean = false;
+    /** Whether this object should be maximized in the y direction within its container */
+    maximizeY : boolean = false;
 
     gameclass : GameObjectClass;
 
