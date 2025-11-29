@@ -59,8 +59,8 @@ export function setup_brickbreaker() {
 
         // Create ball
         ball = ballClass.spawn(paddle.x, paddle.y - 50);
-        ball.setOrientation(-90); // Up
-        ball.velocity = ball.speed;
+        paddle.attach(ball, 0, -(paddle.height / 2 + ball.height / 2), 0);
+        ball.velocity = 0;
 
         // Create bricks
         // Lay bricks using each brick's actual dimensions so they don't overlap
@@ -127,9 +127,8 @@ export function setup_brickbreaker() {
                     return;
                 }
                 // Reset ball
-                ball.setLocation(paddle.x, paddle.y - 50);
-                ball.setOrientation(-90);
-                ball.velocity = ball.speed;
+                paddle.attach(ball, 0, -(paddle.height / 2 + ball.height / 2), 0);
+                ball.velocity = 0;
             }
 
             // Check win condition
@@ -147,7 +146,21 @@ export function setup_brickbreaker() {
 
         music.play();
     });
-    
+
+    onKeyDown(' ', () => launchBall());
+
+    function launchBall() {
+        if (ball.attachedTo) {
+            paddle.detach(ball);
+            const maxAngleOffset = 45; // degrees
+            const fraction = paddle.x_speed / paddle.speed;
+            const angleOffset = fraction * maxAngleOffset;
+            const launchAngle = 0 + angleOffset; // 0 is straight up
+            ball.setOrientation(launchAngle);
+            ball.velocity = ball.speed;
+        }
+    }
+
     function move_paddle(paddle: Player) {
         // Paddle moves towards mouse horizontally with velocity
         const mousePos = getMousePosition();

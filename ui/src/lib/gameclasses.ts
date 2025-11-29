@@ -217,7 +217,7 @@ export class GameObject {
         this.maxDurationMillis = millis;
     }
 
-    private updateAttached() {
+    protected updateAttached() {
         for (const attached of this.attachedObjects) {
             attached.update(this);
         }
@@ -454,6 +454,7 @@ export class Player extends GameObject {
             this.y = 0;
         if(this.y > boardHeight)
             this.y = boardHeight;
+        this.updateAttached();
     }
 
     enableArrowKeysMovement() {
