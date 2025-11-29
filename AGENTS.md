@@ -1,61 +1,25 @@
 # Agent Guidelines for SimpleGame
+SimpleGame is a simple game engine for 2D games written in typescript and svelte to be run in a web browser.
+It comes packaged with some demo games that beginners can start with.
 
 ## Build/Lint/Test Commands
 - **Build**: `npm run build` (in ui/ directory)
 - **Dev server**: `npm run dev` (in ui/ directory)
 - **Type checking**: `npm run check` (runs svelte-check and tsc)
 - **Preview**: `npm run preview` (in ui/ directory)
-- **No test framework configured** - run manual testing
+- **No test framework** - run manual testing
+
+## Git Commit Rules
+- NEVER execute `git commit` unless explicitly instructed via /commit command
+- If commit seems necessary, suggest changes and prompt user to use /commit command
 
 ## Code Style Guidelines
-
-### Language & Framework
-- **TypeScript** with strict typing enabled
-- **Svelte 5** for UI components
-- **ESNext** modules and syntax
-- Target modern browsers (ESNext)
-
-### Imports
-- Use relative imports: `import { setup } from '../game'`
-- Group imports: standard library, then third-party, then local
-- Avoid wildcard imports (`import *`)
-
-### Naming Conventions
-- **Variables/Functions**: camelCase (`gameObjects`, `doMovement`)
-- **Classes**: PascalCase (`GameObjectClass`, `CollisionAction`)
-- **Constants**: UPPER_SNAKE_CASE for exported constants
-- **Files**: kebab-case for components, camelCase for utilities (`simplegame.ts`)
-
-### Types & Interfaces
-- Use explicit types: `let canvas: HTMLCanvasElement`
-- Define interfaces for complex objects: `type Position2D = {x: number, y: number}`
-- Prefer `type` over `interface` for simple object types
-- Use union types where appropriate
-
-### Error Handling
-- Defensive programming over try/catch blocks
-- Null checks: `if(object) { ... }`
-- Optional chaining: `object?.method()`
-- Early returns for invalid states
-
-### Formatting
-- **Indentation**: 4 spaces (inconsistent in codebase, prefer 4)
-- **Line length**: No strict limit, break long lines logically
-- **Spacing**: Space around operators, after commas
-- **Braces**: Same line for functions, new line for classes
-
-### Code Structure
-- Export functions/classes explicitly: `export function everyTick(callback)`
-- Use arrow functions for callbacks: `(delta_t) => { ... }`
-- Prefer functional programming where possible
-- Keep functions focused on single responsibility
-
-### Comments
-- JSDoc for public APIs: `/** Register a callback to be called every tick */`
-- Inline comments for complex logic only
-- TODO comments for future work: `// TODO: implement touchscreen support`
-
-### Security
-- No secrets or keys in code
-- Validate user inputs
-- Use HTTPS for external resources
+- **Language**: TypeScript with strict typing, Svelte 5, ESNext modules
+- **Imports**: Relative imports, group by: standard → third-party → local, no wildcards
+- **Naming**: camelCase (variables/functions), PascalCase (classes), UPPER_SNAKE_CASE (constants), kebab-case (components)
+- **Types**: Explicit types, prefer `type` over `interface`, use union types
+- **Error Handling**: Defensive programming, null checks, optional chaining, early returns
+- **Formatting**: 4 spaces indentation, spaces around operators, logical line breaks
+- **Structure**: Explicit exports, arrow functions for callbacks, functional programming, single responsibility
+- **Comments**: JSDoc for public APIs, inline for complex logic, TODO for future work
+- **Security**: No secrets/keys in code, validate inputs, use HTTPS
