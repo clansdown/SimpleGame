@@ -23,6 +23,8 @@ export const collisionActions : CollisionAction[] = [];
 const onKeyDownMap = new Map<string, ()=>void>();
 const onKeyUpMap = new Map<string, ()=>void>();
 const keyEvents : KeyboardEvent[] = [];
+const onMouseClickMap = new Map<number, (event: MouseEvent, x: number, y: number) => void>();
+const mouseDownTimes = new Map<string, number>();
 
 export let boardWidth = 10000;
 export let boardHeight = 10000;
@@ -148,34 +150,59 @@ function eventHandlerMouseDown(event : MouseEvent) {
     if(event.buttons & 1) {
         let initial = keyMap.has('mouse1') ? !keyMap.get('mouse1') : true;
         keyMap.set('mouse1', true);
+        if(initial) {
+            mouseDownTimes.set('mouse1', Date.now());
+        }
     }
     // middle mouse button
     if(event.buttons & 4) {
         let initial = keyMap.has('mouse2') ? !keyMap.get('mouse2') : true;
         keyMap.set('mouse2', true);
+        if(initial) {
+            mouseDownTimes.set('mouse2', Date.now());
+        }
     }
     // right mouse button
     if(event.buttons & 2) {
         let initial = keyMap.has('mouse3') ? !keyMap.get('mouse3') : true;
         keyMap.set('mouse3', true);
+        if(initial) {
+            mouseDownTimes.set('mouse3', Date.now());
+        }
     }
 }
 
 function eventHandlerMouseUp(event : MouseEvent) {
+    const x = windowWidth * (event.clientX / canvas.clientWidth) + windowX;
+    const y = windowHeight * (event.clientY / canvas.clientHeight) + windowY;
+    const now = Date.now();
+
     // left mouse button
     if(!(event.buttons & 1)) {
         let initial = keyMap.get('mouse1') == true;
         keyMap.set('mouse1', false);
+        if(initial && (now - (mouseDownTimes.get('mouse1') || 0)) <= 600) {
+            const callback = onMouseClickMap.get(0);
+            if(callback) callback(event, x, y);
+        }
     }
     // middle mouse button
     if(!(event.buttons & 4)) {
         let initial = keyMap.get('mouse2') == true;
         keyMap.set('mouse2', false);
+        if(initial && (now - (mouseDownTimes.get('mouse2') || 0)) <= 600) {
+            const callback = onMouseClickMap.get(1);
+            if(callback) callback(event, x, y);
+        }
     }
     // right mouse button
     if(!(event.buttons & 2)) {
         let initial = keyMap.get('mouse3') == true;
         keyMap.set('mouse3', false);
+        if(initial && (now - (mouseDownTimes.get('mouse3') || 0)) <= 600) {
+            const callback = onMouseClickMap.get(2);
+            if(callback) callback(event, x, y);
+        }
     }
 }
 
@@ -563,6 +590,10 @@ export function onKeyDown(key : string, callback : ()=>void) {
 
 export function onKeyUp(key : string, callback : ()=>void) {
     onKeyUpMap.set(key, callback);
+}
+
+export function onMouseClick(button: number, handler: (event: MouseEvent, x: number, y: number) => void) {
+    onMouseClickMap.set(button, handler);
 }
 
 export function onButtonDown(button : number, callback : ()=>void) {

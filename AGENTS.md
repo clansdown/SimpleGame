@@ -23,3 +23,4 @@ It comes packaged with some demo games that beginners can start with.
 - **Structure**: Explicit exports, arrow functions for callbacks, functional programming, single responsibility
 - **Comments**: JSDoc for public APIs, inline for complex logic, TODO for future work
 - **Security**: No secrets/keys in code, validate inputs, use HTTPS
+- Prefer real functions to "const functionName = lambda" unless the function is being used as a lambda and using a lambda cleaner code. All top level functions should be real functions and not lambdas.
