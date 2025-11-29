@@ -147,7 +147,7 @@ export function setup_brickbreaker() {
         music.play();
     });
 
-    onKeyDown(' ', () => launchBall());
+    onKeyDown(' ', playerDoMainAction);
 
     function launchBall() {
         if (ball.attachedTo) {
@@ -159,6 +159,10 @@ export function setup_brickbreaker() {
             ball.setOrientation(launchAngle);
             ball.velocity = ball.speed;
         }
+    }
+
+    function playerDoMainAction() {
+        launchBall();
     }
 
     function move_paddle(paddle: Player) {
