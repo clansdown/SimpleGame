@@ -93,6 +93,52 @@ class PeriodicWork {
     }
 }
 
+function isPointInHitbox(obj: GameObject, x: number, y: number): boolean {
+    const left = obj.x + obj.hitboxXOffset - obj.hitboxWidth / 2;
+    const right = obj.x + obj.hitboxXOffset + obj.hitboxWidth / 2;
+    const top = obj.y + obj.hitboxYOffset - obj.hitboxHeight / 2;
+    const bottom = obj.y + obj.hitboxYOffset + obj.hitboxHeight / 2;
+    return x >= left && x <= right && y >= top && y <= bottom;
+}
+
+function handleMouseDown(button: number, key: string, event: MouseEvent, boardX: number, boardY: number) {
+    let initial = keyMap.has(key) ? !keyMap.get(key) : true;
+    keyMap.set(key, true);
+    if (initial) {
+        mouseDownTimes.set(key, Date.now());
+        for (const obj of gameObjects) {
+            if (isPointInHitbox(obj, boardX, boardY)) {
+                const handler = obj.onMouseDownMap.get(button);
+                if (handler) handler(event);
+            }
+        }
+    }
+}
+
+function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: number, boardY: number) {
+    let initial = keyMap.get(key) == true;
+    keyMap.set(key, false);
+    let clickHandled = false;
+    if (initial) {
+        for (const obj of gameObjects) {
+            if (isPointInHitbox(obj, boardX, boardY)) {
+                const upHandler = obj.onMouseUpMap.get(button);
+                if (upHandler) upHandler(event);
+                const clickHandler = obj.onClickMap.get(button);
+                if (clickHandler) {
+                    clickHandler(event);
+                    clickHandled = true;
+                }
+            }
+        }
+        const now = Date.now();
+        if (!clickHandled && (now - (mouseDownTimes.get(key) || 0)) <= 600) {
+            const callback = onMouseClickMap.get(button);
+            if (callback) callback(event, boardX, boardY);
+        }
+    }
+}
+
 
 
 
@@ -145,65 +191,21 @@ function eventHandlerMouseMove(event : MouseEvent) {
 
 function eventHandlerMouseDown(event : MouseEvent) {
     stillNeedInitialMouseClick = false;
+    const boardX = windowWidth * (event.clientX / canvas.clientWidth) + windowX;
+    const boardY = windowHeight * (event.clientY / canvas.clientHeight) + windowY;
 
-    // left mouse button
-    if(event.buttons & 1) {
-        let initial = keyMap.has('mouse1') ? !keyMap.get('mouse1') : true;
-        keyMap.set('mouse1', true);
-        if(initial) {
-            mouseDownTimes.set('mouse1', Date.now());
-        }
-    }
-    // middle mouse button
-    if(event.buttons & 4) {
-        let initial = keyMap.has('mouse2') ? !keyMap.get('mouse2') : true;
-        keyMap.set('mouse2', true);
-        if(initial) {
-            mouseDownTimes.set('mouse2', Date.now());
-        }
-    }
-    // right mouse button
-    if(event.buttons & 2) {
-        let initial = keyMap.has('mouse3') ? !keyMap.get('mouse3') : true;
-        keyMap.set('mouse3', true);
-        if(initial) {
-            mouseDownTimes.set('mouse3', Date.now());
-        }
-    }
+    if (event.buttons & 1) handleMouseDown(0, 'mouse1', event, boardX, boardY);
+    if (event.buttons & 4) handleMouseDown(1, 'mouse2', event, boardX, boardY);
+    if (event.buttons & 2) handleMouseDown(2, 'mouse3', event, boardX, boardY);
 }
 
 function eventHandlerMouseUp(event : MouseEvent) {
-    const x = windowWidth * (event.clientX / canvas.clientWidth) + windowX;
-    const y = windowHeight * (event.clientY / canvas.clientHeight) + windowY;
-    const now = Date.now();
+    const boardX = windowWidth * (event.clientX / canvas.clientWidth) + windowX;
+    const boardY = windowHeight * (event.clientY / canvas.clientHeight) + windowY;
 
-    // left mouse button
-    if(!(event.buttons & 1)) {
-        let initial = keyMap.get('mouse1') == true;
-        keyMap.set('mouse1', false);
-        if(initial && (now - (mouseDownTimes.get('mouse1') || 0)) <= 600) {
-            const callback = onMouseClickMap.get(0);
-            if(callback) callback(event, x, y);
-        }
-    }
-    // middle mouse button
-    if(!(event.buttons & 4)) {
-        let initial = keyMap.get('mouse2') == true;
-        keyMap.set('mouse2', false);
-        if(initial && (now - (mouseDownTimes.get('mouse2') || 0)) <= 600) {
-            const callback = onMouseClickMap.get(1);
-            if(callback) callback(event, x, y);
-        }
-    }
-    // right mouse button
-    if(!(event.buttons & 2)) {
-        let initial = keyMap.get('mouse3') == true;
-        keyMap.set('mouse3', false);
-        if(initial && (now - (mouseDownTimes.get('mouse3') || 0)) <= 600) {
-            const callback = onMouseClickMap.get(2);
-            if(callback) callback(event, x, y);
-        }
-    }
+    if (!(event.buttons & 1)) handleMouseUp(0, 'mouse1', event, boardX, boardY);
+    if (!(event.buttons & 4)) handleMouseUp(1, 'mouse2', event, boardX, boardY);
+    if (!(event.buttons & 2)) handleMouseUp(2, 'mouse3', event, boardX, boardY);
 }
 
 function eventHandlerKeyDown(event : KeyboardEvent) {

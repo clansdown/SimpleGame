@@ -47,7 +47,7 @@ export class Button extends GameObject {
         this.text = text;
     }
 
-    onClick(callback: () => void) {
+    setOnClick(callback: () => void) {
         this.onClickCallback = callback;
     }
 

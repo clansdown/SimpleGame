@@ -178,6 +178,10 @@ export class GameObject {
 
     gameclass : GameObjectClass;
 
+    onClickMap: Map<number, (event: MouseEvent) => void> = new Map();
+    onMouseDownMap: Map<number, (event: MouseEvent) => void> = new Map();
+    onMouseUpMap: Map<number, (event: MouseEvent) => void> = new Map();
+
     fadeInMillis : number = 0;
     growInMillis : number = 0;
     fateOutMillis : number = 0;
@@ -208,6 +212,18 @@ export class GameObject {
         this.hitboxYOffset = gameclass.hitboxYOffset;
         this.orientation = 0;
         this.speed = gameclass.defaultSpeed;
+    }
+
+    onClick(button: number, handler: (event: MouseEvent) => void) {
+        this.onClickMap.set(button, handler);
+    }
+
+    onMouseDown(button: number, handler: (event: MouseEvent) => void) {
+        this.onMouseDownMap.set(button, handler);
+    }
+
+    onMouseUp(button: number, handler: (event: MouseEvent) => void) {
+        this.onMouseUpMap.set(button, handler);
     }
 
     /**
