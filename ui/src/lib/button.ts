@@ -41,6 +41,11 @@ export class Button extends GameObject {
         this.hitboxHeight = height;
         this.hitboxXOffset = 0;
         this.hitboxYOffset = 0;
+
+        // Automatically install onClick handler for left mouse button
+        this.onClick(0, (event) => {
+            if (this.onClickCallback) this.onClickCallback();
+        });
     }
 
     setText(text: string) {
@@ -51,24 +56,7 @@ export class Button extends GameObject {
         this.onClickCallback = callback;
     }
 
-    /**
-     * Check if a point is inside this button
-     */
-    containsPoint(point: Position2D): boolean {
-        return point.x >= this.x - this.width / 2 &&
-               point.x <= this.x + this.width / 2 &&
-               point.y >= this.y - this.height / 2 &&
-               point.y <= this.y + this.height / 2;
-    }
 
-    /**
-     * Handle mouse click - should be called from game loop when mouse is clicked
-     */
-    handleClick(mousePos: Position2D) {
-        if (this.containsPoint(mousePos) && this.onClickCallback) {
-            this.onClickCallback();
-        }
-    }
 
     /**
      * Override draw method to render button with background and text
