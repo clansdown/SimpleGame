@@ -165,13 +165,7 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
     debugElement = debugDiv;
     debugElement.innerHTML = "";
     canvas = screenCanvas;
-    canvas.addEventListener('keydown', eventHandlerKeyDown);
-    canvas.addEventListener('keyup', eventHandlerKeyUp);
-    // mouse handler
-    canvas.addEventListener('mousemove', eventHandlerMouseMove);
-    canvas.addEventListener('mousedown', eventHandlerMouseDown);
-    canvas.addEventListener('mouseup', eventHandlerMouseUp);
-    canvas.focus();
+    attachEventListeners();
 
     /* Call the game's setup function */
     setup();
@@ -182,6 +176,49 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
     /* Kick off the main loop */
     lastGameLoopTime = Date.now();
     mainGameLoop();
+}
+
+/**
+ * Attaches all event listeners to the current canvas.
+ * Connects keyboard (keydown, keyup) and mouse (mousemove, mousedown, mouseup) handlers.
+ * Should be called after setting or changing the canvas.
+ */
+export function attachEventListeners() {
+    canvas.addEventListener('keydown', eventHandlerKeyDown);
+    canvas.addEventListener('keyup', eventHandlerKeyUp);
+    canvas.addEventListener('mousemove', eventHandlerMouseMove);
+    canvas.addEventListener('mousedown', eventHandlerMouseDown);
+    canvas.addEventListener('mouseup', eventHandlerMouseUp);
+    canvas.focus();
+}
+
+/**
+ * Removes all event listeners from the current canvas.
+ * Disconnects keyboard and mouse handlers to prevent memory leaks when switching canvases.
+ */
+export function removeEventListeners() {
+    canvas.removeEventListener('keydown', eventHandlerKeyDown);
+    canvas.removeEventListener('keyup', eventHandlerKeyUp);
+    canvas.removeEventListener('mousemove', eventHandlerMouseMove);
+    canvas.removeEventListener('mousedown', eventHandlerMouseDown);
+    canvas.removeEventListener('mouseup', eventHandlerMouseUp);
+}
+
+/**
+ * Assigns a new canvas to the game engine. Removes event listeners from the old canvas
+ * and attaches them to the new one. Use this when you want to switch the rendering target.
+ *
+ * @param newCanvas - The new HTMLCanvasElement to use for rendering and input
+ * @example
+ *   const newCanvas = document.getElementById('game-canvas-2');
+ *   setCanvas(newCanvas);
+ */
+export function setCanvas(newCanvas: HTMLCanvasElement) {
+    if (canvas) {
+        removeEventListeners();
+    }
+    canvas = newCanvas;
+    attachEventListeners();
 }
 
 function eventHandlerMouseMove(event : MouseEvent) {
@@ -631,4 +668,43 @@ export function setBackground(tiles: string[], whenLoaded: ()=>void = ()=>{}) {
 export function setBoardSize(width : number, height : number) {
     boardWidth = width;
     boardHeight = height;
+}
+
+/**
+ * Sets the game board dimensions (width and height in game coordinates).
+ * This is an alias for setBoardSize. Use to change the virtual world size.
+ *
+ * @param width - The width of the game board in game coordinate units
+ * @param height - The height of the game board in game coordinate units
+ * @example
+ *   setSize(1920, 1080);
+ */
+export function setSize(width: number, height: number) {
+    boardWidth = width;
+    boardHeight = height;
+}
+
+/**
+ * Clears all game objects and assets from the engine.
+ * Destroys all game objects and empties all collections including players, enemies,
+ * projectiles, items, and collision actions. Also resets camera position to origin.
+ *
+ * @example
+ *   clear(); // Use this when resetting or restarting a game
+ */
+export function clear() {
+    for (const obj of gameObjects) {
+        obj.gameclass.destroy(obj);
+    }
+    gameObjects.clear();
+    players.length = 0;
+    enemies.clear();
+    projectiles.clear();
+    items.clear();
+    collisionActions.length = 0;
+    for (const gc of gameClasses) {
+        gc.gameObjects.clear();
+    }
+    windowX = 0;
+    windowY = 0;
 }
