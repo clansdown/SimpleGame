@@ -160,6 +160,13 @@ export class GameObject {
     /** The current speed in the direction of travel */
     velocity : number = 0;
 
+    /** The target destination for moveTo movement. Null if no destination set. */
+    destination : Position2D | null = null;
+    /** The distance from the destination at which deceleration begins. */
+    decelerationDistance : number = 4;
+    /** A number of seconds for the minimum deceleration velocity. Higher values allow slower final approach. */
+    decelerationTime : number = 1.0;
+
     boundToBoard : boolean = false;
 
     destroyIfOffBoard : boolean = false;
@@ -294,6 +301,25 @@ export class GameObject {
     }
 
     /**
+     * Moves the object to the specified position in the given time.
+     * Sets orientation to face the destination and calculates velocity to arrive on schedule.
+     * Deceleration is applied automatically when within decelerationDistance of destination.
+     *
+     * @param position - The target position to move to
+     * @param time - The time in seconds to complete the movement
+     * @example
+     *   enemy.moveTo({x: 1000, y: 500}, 3.0); // Moves to position over 3 seconds
+     */
+    moveTo(position: Position2D, time: number) {
+        const dx = position.x - this.x;
+        const dy = position.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        this.destination = position;
+        this.setOrientationTowards(position);
+        this.velocity = distance / time;
+    }
+
+    /**
      * Attaches another GameObject to this one with the specified offsets and orientation offset.
      */
     attach(gameObject: GameObject, offsetX: number, offsetY: number, orientationOffset: number) {
@@ -318,6 +344,32 @@ export class GameObject {
         if (this.attachedTo) {
             return;
         }
+
+        // Handle destination-based movement with deceleration
+        if (this.destination) {
+            const dx = this.destination.x - this.x;
+            const dy = this.destination.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Check if reached destination (within 0.01 tolerance)
+            if (distance <= 0.01) {
+                this.x = this.destination.x;
+                this.y = this.destination.y;
+                this.velocity = 0;
+                this.destination = null;
+                this.updateAttached();
+                return;
+            }
+
+            // Apply deceleration if within decelerationDistance
+            if (distance <= this.decelerationDistance && this.velocity > 0) {
+                const distanceRatio = distance / this.decelerationDistance;
+                const deceleratedVelocity = this.velocity / (distanceRatio * distanceRatio);
+                const minimumVelocity = this.velocity / (this.decelerationTime * this.decelerationTime);
+                this.velocity = Math.max(deceleratedVelocity, minimumVelocity);
+            }
+        }
+
         this.x += this.direction_x*this.velocity*delta_t;
         this.y += this.direction_y*this.velocity*delta_t;
         // console.log(this.gameclass.name, this.x, this.y, this.direction_x, this.direction_y, this.velocity, delta_t);
@@ -453,6 +505,39 @@ export class Player extends GameObject {
     }
 
     doMovement(delta_t: number): void {
+        // Handle destination-based movement with deceleration (takes precedence over keyboard)
+        if (this.destination) {
+            const dx = this.destination.x - this.x;
+            const dy = this.destination.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Check if reached destination (within 0.01 tolerance)
+            if (distance <= 0.01) {
+                this.x = this.destination.x;
+                this.y = this.destination.y;
+                this.x_speed = 0;
+                this.y_speed = 0;
+                this.velocity = 0;
+                this.destination = null;
+                this.updateAttached();
+                return;
+            }
+
+            // Apply deceleration if within decelerationDistance
+            let speed = this.speed;
+            if (distance <= this.decelerationDistance && this.velocity > 0) {
+                const distanceRatio = distance / this.decelerationDistance;
+                const deceleratedVelocity = this.velocity / (distanceRatio * distanceRatio);
+                const minimumVelocity = this.velocity / (this.decelerationTime * this.decelerationTime);
+                speed = Math.max(deceleratedVelocity, minimumVelocity);
+            }
+
+            // Calculate direction and apply velocity
+            const norm = distance;
+            this.x_speed = (dx / norm) * speed;
+            this.y_speed = (dy / norm) * speed;
+        }
+
         const normalized_x_speed = this.x_speed/this.speed;
         const normalized_y_speed = this.y_speed/this.speed;
         let norm = Math.sqrt(normalized_x_speed*normalized_x_speed + normalized_y_speed*normalized_y_speed);
@@ -488,6 +573,26 @@ export class Player extends GameObject {
     }
     setSpeedY(speed : number) {
         this.y_speed = speed;
+    }
+
+    /**
+     * Moves the player to the specified position in the given time.
+     * Sets orientation to face the destination and calculates speed to arrive on schedule.
+     * Deceleration is applied automatically when within decelerationDistance of destination.
+     * This takes precedence over keyboard input.
+     *
+     * @param position - The target position to move to
+     * @param time - The time in seconds to complete the movement
+     * @example
+     *   player.moveTo({x: 500, y: 300}, 2.0); // Moves to position over 2 seconds
+     */
+    moveTo(position: Position2D, time: number) {
+        const dx = position.x - this.x;
+        const dy = position.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        this.destination = position;
+        this.setOrientationTowards(position);
+        this.velocity = distance / time;
     }
 }
 
