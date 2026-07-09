@@ -196,9 +196,18 @@ export class GameObject {
 
     gameclass : GameObjectClass;
 
+    isHovered: boolean = false;
     onClickMap: Map<number, (event: MouseEvent) => void> = new Map();
     onMouseDownMap: Map<number, (event: MouseEvent) => void> = new Map();
     onMouseUpMap: Map<number, (event: MouseEvent) => void> = new Map();
+    onMouseOverMap: Map<number, (event: MouseEvent) => void> = new Map();
+    onMouseOutMap: Map<number, (event: MouseEvent) => void> = new Map();
+
+    draggable: boolean = false;
+    isDragging: boolean = false;
+    onDragStartMap: Map<number, () => void> = new Map();
+    onDragMap: Map<number, () => void> = new Map();
+    onDragEndMap: Map<number, () => void> = new Map();
 
     fadeInMillis : number = 0;
     growInMillis : number = 0;
@@ -242,6 +251,26 @@ export class GameObject {
 
     onMouseUp(button: number, handler: (event: MouseEvent) => void) {
         this.onMouseUpMap.set(button, handler);
+    }
+
+    onMouseOver(button: number, handler: (event: MouseEvent) => void) {
+        this.onMouseOverMap.set(button, handler);
+    }
+
+    onMouseOut(button: number, handler: (event: MouseEvent) => void) {
+        this.onMouseOutMap.set(button, handler);
+    }
+
+    onDragStart(button: number, handler: () => void) {
+        this.onDragStartMap.set(button, handler);
+    }
+
+    onDrag(button: number, handler: () => void) {
+        this.onDragMap.set(button, handler);
+    }
+
+    onDragEnd(button: number, handler: () => void) {
+        this.onDragEndMap.set(button, handler);
     }
 
     /**

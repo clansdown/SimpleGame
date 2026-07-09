@@ -85,6 +85,7 @@ If you don't pass a setup function, `initEngine` uses the one exported from
 | `periodically(seconds, fn)` | Registers a callback invoked at a fixed interval. |
 | `onPause(fn)` | Fires when the game is paused (p key). |
 | `onResume(fn)` | Fires when the game resumes. |
+| `afterDraw(fn)` | Registers a callback that runs after game objects are drawn each frame. Receives `(ctx, offsetX, offsetY)`. |
 
 ---
 
@@ -154,6 +155,7 @@ This empties every game collection and resets the camera position.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types (defines image, defaults). |
+| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`. |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. |
@@ -190,8 +192,186 @@ This empties every game collection and resets the camera position.
 
 | Export | Description |
 |---|---|
-| `ButtonClass` / `Button` | Clickable button with text and optional image. |
+| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight and click press indication. |
 | `Row` | Horizontal layout container. |
 | `Column` | Vertical layout container. |
 | `Page` | Page with optional border. |
 | `ScrollablePage` | Scrollable page container. |
+
+---
+
+## Buttons
+
+### Creating a button
+
+```typescript
+import { ButtonClass } from "./lib/button";
+
+const buttonClass = new ButtonClass("btn");
+
+buttonClass.spawn(
+    x, y,                    // position (centre)
+    "Click Me",              // text
+    120, 50,                 // width, height
+    undefined,               // backgroundImage (optional)
+    "#A0A080",               // color
+    "icon.png"               // iconFile (optional)
+);
+```
+
+### Hover & click visuals
+
+Buttons automatically lighten on hover and darken on click. You can customise:
+
+```typescript
+button.hoverColor = "#D0D0B0";
+button.clickColor = "#707050";
+```
+
+For buttons with a `backgroundImage`, hover adds a semi-transparent white overlay and click adds a semi-transparent black overlay.
+
+### Icons
+
+Pass an icon file path to `spawn()` or call `setIcon()`:
+
+```typescript
+button.setIcon("path/to/icon.png");
+```
+
+Adjust icon rendering:
+
+```typescript
+button.iconSize = 24;       // default 16
+button.iconPadding = 12;    // default 8
+```
+
+### Mouseover events
+
+Any `GameObject` (not just buttons) can listen for hover:
+
+```typescript
+obj.onMouseOver(0, () => console.log("mouse entered"));
+obj.onMouseOut(0, () => console.log("mouse left"));
+```
+
+The `isHovered` boolean is updated every frame for all game objects.
+
+---
+
+## Overlays
+
+Overlays render a semi-transparent coloured region with optional cutout holes.
+Use them to show placement zones, danger areas, line-of-sight, etc.
+
+### Creating an overlay
+
+```typescript
+import { Overlay } from "./lib/overlay";
+
+const zone = new Overlay(
+    [
+        { x: 100, y: 100 },
+        { x: 900, y: 100 },
+        { x: 900, y: 900 },
+        { x: 100, y: 900 },
+    ],
+    "rgba(0, 200, 0, 0.25)",
+);
+```
+
+### Adding cutouts (holes)
+
+```typescript
+// Polygon cutout
+zone.addCutout([
+    { x: 300, y: 300 },
+    { x: 500, y: 300 },
+    { x: 500, y: 500 },
+    { x: 300, y: 500 },
+]);
+
+// Rectangular cutout (convenience)
+zone.addRectCutout(600, 600, 100, 100);
+
+// Circular cutout (convenience)
+zone.addCircleCutout(700, 200, 80, 32);
+```
+
+### Drawing
+
+Register an `afterDraw` callback in your setup to render the overlay on
+top of all game objects each frame:
+
+```typescript
+import { afterDraw } from "./lib/simplegame";
+
+whenLoaded(() => {
+    afterDraw((ctx, offsetX, offsetY) => {
+        zone.draw(ctx, offsetX, offsetY);
+    });
+});
+```
+
+### Triangulation
+
+If you need the overlay geometry as triangles (e.g. for WebGL or custom
+rendering), call `triangulate()`:
+
+```typescript
+const triangles = zone.triangulate();
+// Each triangle is [Position2D, Position2D, Position2D]
+```
+
+The triangulation uses ear-clipping with hole bridging, producing
+non-overlapping triangles covering the entire region.
+
+### API reference
+
+| Member | Description |
+|---|---|
+| `boundary` | The outer polygon vertices. |
+| `cutouts` | Array of hole polygons. |
+| `color` | Fill colour (any valid CSS `rgba` / `hsla` string). |
+| `addCutout(polygon)` | Add a hole defined by a polygon. |
+| `addRectCutout(x, y, w, h)` | Add a rectangular hole. |
+| `addCircleCutout(cx, cy, r, segments?)` | Add a circular hole (default 24 segments). |
+| `draw(ctx, offsetX, offsetY)` | Render the overlay using the canvas `evenodd` fill rule. |
+| `triangulate()` | Compute non-overlapping triangles covering the region. |
+
+---
+
+## Dragging
+
+Any `GameObject` can be made draggable. While being dragged, the object's
+position follows the mouse cursor automatically.
+
+### Enabling drag
+
+```typescript
+const unit = playerClass.spawn(100, 100);
+unit.draggable = true;
+```
+
+### Drag lifecycle callbacks
+
+```typescript
+unit.onDragStart(0, () => console.log("picked up"));
+unit.onDrag(0, () => console.log("dragging to", unit.x, unit.y));
+unit.onDragEnd(0, () => console.log("dropped at", unit.x, unit.y));
+```
+
+The button parameter (here `0` for left mouse button) works the same as
+`onMouseDown` / `onMouseUp`.
+
+While dragging the object's `isDragging` property is `true` and its velocity is
+set to zero so the engine's movement system doesn't interfere.
+
+### API reference
+
+| Member | Type | Description |
+|---|---|---|
+| `draggable` | `boolean` | Set to `true` to enable dragging via mouse. |
+| `isDragging` | `boolean` | Read-only; `true` while the object is being dragged. |
+| `onDragStart(button, handler)` | method | Fires once when drag begins. |
+| `onDrag(button, handler)` | method | Fires every frame while dragging. |
+| `onDragEnd(button, handler)` | method | Fires when the drag ends (mouse released). |

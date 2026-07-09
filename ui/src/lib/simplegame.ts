@@ -38,6 +38,7 @@ let windowY = 0;
 let onLoadedWork : (()=>void)[] = [];
 let onPauseWork : (()=>void)[] = [];
 let onResumeWork : (()=>void)[] = [];
+const afterDrawWork : ((ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number) => void)[] = [];
 
 let ticksPerSecond = 40;
 let canvas: HTMLCanvasElement;
@@ -48,6 +49,9 @@ let notAllClassesAreLoaded : boolean = true;
 
 /** Mouse coordinates on the board */
 let mousePosition : Position2D = {x: 0, y: 0};
+
+let dragTarget : GameObject | null = null;
+let dragButton : number = -1;
 
 let stillNeedInitialMouseClick : boolean = true;
 
@@ -230,12 +234,34 @@ export function setCanvas(newCanvas: HTMLCanvasElement) {
 function eventHandlerMouseMove(event : MouseEvent) {
     mousePosition.x = windowWidth * (event.clientX/canvas.clientWidth) + windowX;
     mousePosition.y = windowHeight * (event.clientY/canvas.clientHeight) + windowY;
+
+    if (dragTarget) {
+        dragTarget.x = mousePosition.x;
+        dragTarget.y = mousePosition.y;
+        dragTarget.velocity = 0;
+        const handler = dragTarget.onDragMap.get(dragButton);
+        if (handler) handler();
+    }
 }
 
 function eventHandlerMouseDown(event : MouseEvent) {
     stillNeedInitialMouseClick = false;
     const boardX = windowWidth * (event.clientX / canvas.clientWidth) + windowX;
     const boardY = windowHeight * (event.clientY / canvas.clientHeight) + windowY;
+
+    if (event.buttons & 1) {
+        for (const obj of gameObjects) {
+            if (obj.draggable && !obj.isDragging && isPointInHitbox(obj, boardX, boardY)) {
+                dragTarget = obj;
+                dragButton = 0;
+                obj.isDragging = true;
+                obj.velocity = 0;
+                const handler = obj.onDragStartMap.get(0);
+                if (handler) handler();
+                break;
+            }
+        }
+    }
 
     if (event.buttons & 1) handleMouseDown(0, 'mouse1', event, boardX, boardY);
     if (event.buttons & 4) handleMouseDown(1, 'mouse2', event, boardX, boardY);
@@ -249,6 +275,18 @@ function eventHandlerMouseUp(event : MouseEvent) {
     if (!(event.buttons & 1)) handleMouseUp(0, 'mouse1', event, boardX, boardY);
     if (!(event.buttons & 4)) handleMouseUp(1, 'mouse2', event, boardX, boardY);
     if (!(event.buttons & 2)) handleMouseUp(2, 'mouse3', event, boardX, boardY);
+
+    if (dragTarget) {
+        if ((dragButton === 0 && !(event.buttons & 1)) ||
+            (dragButton === 1 && !(event.buttons & 4)) ||
+            (dragButton === 2 && !(event.buttons & 2))) {
+            dragTarget.isDragging = false;
+            const handler = dragTarget.onDragEndMap.get(dragButton);
+            if (handler) handler();
+            dragTarget = null;
+            dragButton = -1;
+        }
+    }
 }
 
 function eventHandlerKeyDown(event : KeyboardEvent) {
@@ -341,6 +379,9 @@ function mainGameLoop() {
     // User Input
     userInput();
 
+    // Hover detection
+    detectHover();
+
     // Move the objects
     moveObjects(delta_t);
 
@@ -427,6 +468,10 @@ function draw() {
         object.draw(ctx, windowX, windowY);
     }
 
+    /* After-draw hooks (overlays, etc.) */
+    for(const work of afterDrawWork) {
+        work(ctx, windowX, windowY);
+    }
 }
 
 function randFromCoordinates(x : number, y : number) : number {
@@ -547,6 +592,20 @@ function userInput() {
     keyEvents.length = 0;
 }
 
+function detectHover() {
+    for (const obj of gameObjects) {
+        const wasHovered = obj.isHovered;
+        obj.isHovered = isPointInHitbox(obj, mousePosition.x, mousePosition.y);
+        if (obj.isHovered && !wasHovered) {
+            const handler = obj.onMouseOverMap.get(0);
+            if (handler) handler(new MouseEvent('mouseover'));
+        } else if (!obj.isHovered && wasHovered) {
+            const handler = obj.onMouseOutMap.get(0);
+            if (handler) handler(new MouseEvent('mouseout'));
+        }
+    }
+}
+
 export function whenLoaded(work : ()=>void) {
     onLoadedWork.push(work);
 }
@@ -557,6 +616,10 @@ export function onPause(work : ()=>void) {
 
 export function onResume(work : ()=>void) {
     onResumeWork.push(work);
+}
+
+export function afterDraw(callback: (ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number) => void): void {
+    afterDrawWork.push(callback);
 }
 
 function doCollisionDetection() : CollisionDetector{
@@ -717,6 +780,8 @@ export function clear() {
     for (const gc of gameClasses) {
         gc.gameObjects.clear();
     }
+    dragTarget = null;
+    dragButton = -1;
     windowX = 0;
     windowY = 0;
 }
