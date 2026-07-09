@@ -161,17 +161,23 @@ export function periodically(seconds : number, callback : () => void) {
 
 let debugElement : HTMLDivElement;
 
-export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivElement) {
+export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivElement, clickToBegin: boolean = true) {
     debugElement = debugDiv;
     debugElement.innerHTML = "";
     canvas = screenCanvas;
     attachEventListeners();
 
+    if (!clickToBegin) {
+        stillNeedInitialMouseClick = false;
+    }
+
     /* Call the game's setup function */
     setup();
 
-    /* Draw the Click to begin screen */
-    drawClickToBegin();
+    /* Draw the Click to begin screen if needed */
+    if (clickToBegin) {
+        drawClickToBegin();
+    }
 
     /* Kick off the main loop */
     lastGameLoopTime = Date.now();
@@ -657,6 +663,12 @@ export function setBackground(tiles: string[], whenLoaded: ()=>void = ()=>{}) {
         img.src = tile;
         images.push(img);
         img.onload = () => {
+            if(--count_unloaded <= 0) {
+                backgroundTileset = images;
+                whenLoaded();
+            }
+        };
+        img.onerror = () => {
             if(--count_unloaded <= 0) {
                 backgroundTileset = images;
                 whenLoaded();

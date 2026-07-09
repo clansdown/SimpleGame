@@ -33,6 +33,7 @@ export class Button extends GameObject {
 
         if (backgroundImage) {
             this.backgroundImage = new Image();
+            this.backgroundImage.onerror = () => { this.backgroundImage = undefined; };
             this.backgroundImage.src = backgroundImage;
         }
 

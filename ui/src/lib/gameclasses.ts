@@ -46,6 +46,17 @@ export class GameObjectClass {
                     this.hitboxHeight = this.defaultHeight;
                 this.loaded = true;
             }
+            this.image.onerror = () => {
+                if(this.defaultWidth == 0)
+                    this.defaultWidth = 32;
+                if(this.defaultHeight == 0)
+                    this.defaultHeight = 32;
+                if(this.hitboxWidth == 0)
+                    this.hitboxWidth = this.defaultWidth;
+                if(this.hitboxHeight == 0)
+                    this.hitboxHeight = this.defaultHeight;
+                this.loaded = true;
+            }
             this.image.src = image_file;
         } else {
             this.image = new Image();
