@@ -31,33 +31,32 @@ Provide a canvas and a debug div, then call `initEngine`:
 
 The third argument (`clickToBegin`) controls whether the engine shows a
 "Click to Begin" screen and waits for user input before starting the game loop.
+The fourth argument (`setupFn`) lets you provide your own setup function instead
+of the one in `game.ts`.
 
 ---
 
 ## The `clickToBegin` Parameter
 
 ```typescript
-initEngine(canvas, debugDiv, clickToBegin = true)
+initEngine(canvas, debugDiv, clickToBegin = true, setupFn = defaultSetup)
 ```
 
-| Value | Behaviour |
-|---|---|
-| `true` (default) | Draws a "Click to Begin" screen and blocks the game loop until the user clicks anywhere on the canvas. |
-| `false` | Starts the game loop immediately. Useful when embedding the engine into an existing UI that has its own navigation. |
+| Param | Default | Behaviour |
+|---|---|---|
+| `clickToBegin` | `true` | Draws a "Click to Begin" screen and blocks the game loop until the user clicks anywhere on the canvas. Pass `false` to start immediately. |
+| `setupFn` | from `game.ts` | Your own setup function, called after the engine initialises and before the game loop begins. |
 
 ---
 
 ## Controlling the Game
 
-The game's logic lives in `game.ts`, which exports a `setup()` function called
-automatically by `initEngine`. Replace `game.ts` with your own, or edit it to
-call your game's setup:
+Pass your own setup function as the fourth argument to `initEngine`:
 
 ```typescript
-// game.ts
-import { setBoardSize, whenLoaded, everyTick } from "./lib/simplegame";
+import { initEngine, setBoardSize, whenLoaded, everyTick } from "./lib/simplegame";
 
-export function setup() {
+function mySetup() {
     setBoardSize(1000, 1000);
 
     whenLoaded(() => {
@@ -66,7 +65,14 @@ export function setup() {
         });
     });
 }
+
+onMount(() => {
+    initEngine(canvas, debug, false, mySetup);
+});
 ```
+
+If you don't pass a setup function, `initEngine` uses the one exported from
+`game.ts` (the default entry point).
 
 ---
 
@@ -119,7 +125,7 @@ This empties every game collection and resets the camera position.
 
 | Export | Kind | Description |
 |---|---|---|
-| `initEngine(canvas, debugDiv, clickToBegin?)` | function | Boot the engine. Must be called once. |
+| `initEngine(canvas, debugDiv, clickToBegin?, setupFn?)` | function | Boot the engine. Must be called once. |
 | `setCanvas(newCanvas)` | function | Swap the rendering canvas. |
 | `attachEventListeners()` | function | Bind keyboard/mouse to the current canvas. |
 | `removeEventListeners()` | function | Unbind keyboard/mouse from the current canvas. |

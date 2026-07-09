@@ -1,8 +1,8 @@
 /* The game engine library */
 
 import { on } from 'svelte/events';
-import {setup} from '../game';
 import { CollisionDetector } from './collision';
+import {setup as defaultSetup} from '../game';
 import { GameObject, gameClasses, type Enemy, type GameObjectClass, type Item, type Player, type Projectile } from './gameclasses';
 import type { Position2D, box2, matrix2 } from './util';
 
@@ -161,7 +161,7 @@ export function periodically(seconds : number, callback : () => void) {
 
 let debugElement : HTMLDivElement;
 
-export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivElement, clickToBegin: boolean = true) {
+export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivElement, clickToBegin: boolean = true, setupFn: () => void = defaultSetup) {
     debugElement = debugDiv;
     debugElement.innerHTML = "";
     canvas = screenCanvas;
@@ -172,7 +172,7 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
     }
 
     /* Call the game's setup function */
-    setup();
+    setupFn();
 
     /* Draw the Click to begin screen if needed */
     if (clickToBegin) {
