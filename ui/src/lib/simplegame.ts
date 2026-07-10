@@ -250,8 +250,9 @@ export function setCanvas(newCanvas: HTMLCanvasElement) {
 }
 
 function eventHandlerMouseMove(event : MouseEvent) {
-    mousePosition.x = windowWidth * (event.clientX/canvas.clientWidth) + windowX;
-    mousePosition.y = windowHeight * (event.clientY/canvas.clientHeight) + windowY;
+    const rect = canvas.getBoundingClientRect();
+    mousePosition.x = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
+    mousePosition.y = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
 
     if (dragTarget) {
         dragTarget.x = mousePosition.x;
@@ -265,8 +266,9 @@ function eventHandlerMouseMove(event : MouseEvent) {
 
 function eventHandlerMouseDown(event : MouseEvent) {
     stillNeedInitialMouseClick = false;
-    const boardX = windowWidth * (event.clientX / canvas.clientWidth) + windowX;
-    const boardY = windowHeight * (event.clientY / canvas.clientHeight) + windowY;
+    const rect = canvas.getBoundingClientRect();
+    const boardX = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
+    const boardY = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
 
     if (event.buttons & 1) {
         for (const obj of gameObjects) {
@@ -289,8 +291,9 @@ function eventHandlerMouseDown(event : MouseEvent) {
 }
 
 function eventHandlerMouseUp(event : MouseEvent) {
-    const boardX = windowWidth * (event.clientX / canvas.clientWidth) + windowX;
-    const boardY = windowHeight * (event.clientY / canvas.clientHeight) + windowY;
+    const rect = canvas.getBoundingClientRect();
+    const boardX = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
+    const boardY = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
 
     if (!(event.buttons & 1)) handleMouseUp(0, 'mouse1', event, boardX, boardY);
     if (!(event.buttons & 4)) handleMouseUp(1, 'mouse2', event, boardX, boardY);
