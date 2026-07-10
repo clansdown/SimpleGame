@@ -264,6 +264,8 @@ function eventHandlerMouseMove(event : MouseEvent) {
     mousePosition.x = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
     mousePosition.y = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
 
+    detectHover();
+
     if (dragTarget) {
         dragTarget.x = mousePosition.x;
         dragTarget.y = mousePosition.y;
@@ -412,9 +414,6 @@ function mainGameLoop() {
 
     // User Input
     userInput();
-
-    // Hover detection
-    detectHover();
 
     // Move the objects
     moveObjects(delta_t);
