@@ -57,6 +57,10 @@ let mousePosition : Position2D = {x: 0, y: 0};
 
 let dragTarget : GameObject | null = null;
 let dragButton : number = -1;
+let dragCandidate : GameObject | null = null;
+let dragCandidateStartX : number = 0;
+let dragCandidateStartY : number = 0;
+const DRAG_THRESHOLD = 5;
 
 let stillNeedInitialMouseClick : boolean = true;
 
@@ -266,6 +270,20 @@ function eventHandlerMouseMove(event : MouseEvent) {
     mousePosition.x = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
     mousePosition.y = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
 
+    if (dragCandidate && !dragTarget) {
+        const dx = mousePosition.x - dragCandidateStartX;
+        const dy = mousePosition.y - dragCandidateStartY;
+        if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+            dragTarget = dragCandidate;
+            dragCandidate = null;
+            dragTarget.isDragging = true;
+            dragTarget.velocity = 0;
+            const handler = dragTarget.onDragStartMap.get(dragButton);
+            if (handler) handler();
+            if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] dragStart: obj=${dragTarget.gameclass.name} at (${dragTarget.x}, ${dragTarget.y})`);
+        }
+    }
+
     detectHover();
 
     if (dragTarget) {
@@ -288,14 +306,12 @@ function eventHandlerMouseDown(event : MouseEvent) {
 
     if (event.buttons & 1) {
         for (const obj of gameObjects) {
-            if (obj.draggable && !obj.isDragging && isPointInHitbox(obj, boardX, boardY)) {
-                dragTarget = obj;
+            if (obj.draggable && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY)) {
+                dragCandidate = obj;
                 dragButton = 0;
-                obj.isDragging = true;
-                obj.velocity = 0;
-                const handler = obj.onDragStartMap.get(0);
-                if (handler) handler();
-                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] dragStart: obj=${obj.gameclass.name} at (${boardX}, ${boardY})`);
+                dragCandidateStartX = boardX;
+                dragCandidateStartY = boardY;
+                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] dragCandidate: obj=${obj.gameclass.name} at (${boardX}, ${boardY})`);
                 break;
             }
         }
@@ -314,6 +330,11 @@ function eventHandlerMouseUp(event : MouseEvent) {
     if (!(event.buttons & 1)) handleMouseUp(0, 'mouse1', event, boardX, boardY);
     if (!(event.buttons & 4)) handleMouseUp(1, 'mouse2', event, boardX, boardY);
     if (!(event.buttons & 2)) handleMouseUp(2, 'mouse3', event, boardX, boardY);
+
+    if (dragCandidate) {
+        dragCandidate = null;
+        dragButton = -1;
+    }
 
     if (dragTarget) {
         if ((dragButton === 0 && !(event.buttons & 1)) ||
@@ -836,6 +857,7 @@ export function clear() {
         gc.gameObjects.clear();
     }
     dragTarget = null;
+    dragCandidate = null;
     dragButton = -1;
     windowX = 0;
     windowY = 0;

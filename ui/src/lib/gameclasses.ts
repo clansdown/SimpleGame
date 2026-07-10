@@ -421,9 +421,26 @@ export class GameObject {
             // Apply deceleration if within decelerationDistance
             if (distance <= this.decelerationDistance && this.velocity > 0) {
                 const distanceRatio = distance / this.decelerationDistance;
-                const deceleratedVelocity = this.velocity / (distanceRatio * distanceRatio);
-                const minimumVelocity = this.velocity / (this.decelerationTime * this.decelerationTime);
+                const deceleratedVelocity = this.velocity * distanceRatio;
+                const minimumVelocity = this.velocity / this.decelerationTime;
                 this.velocity = Math.max(deceleratedVelocity, minimumVelocity);
+            }
+
+            // Recalculate direction toward destination
+            this.setOrientationTowards(this.destination);
+
+            // Prevent overshoot — snap to destination if step exceeds remaining distance
+            const stepDistance = this.velocity * delta_t;
+            if (stepDistance >= distance) {
+                this.x = this.destination.x;
+                this.y = this.destination.y;
+                this.velocity = 0;
+                this.destination = null;
+                if (this.onArrivalWork) {
+                    this.onArrivalWork();
+                }
+                this.updateAttached();
+                return;
             }
         }
 
@@ -576,6 +593,9 @@ export class Player extends GameObject {
                 this.y_speed = 0;
                 this.velocity = 0;
                 this.destination = null;
+                if (this.onArrivalWork) {
+                    this.onArrivalWork();
+                }
                 this.updateAttached();
                 return;
             }
@@ -584,8 +604,8 @@ export class Player extends GameObject {
             let speed = this.speed;
             if (distance <= this.decelerationDistance && this.velocity > 0) {
                 const distanceRatio = distance / this.decelerationDistance;
-                const deceleratedVelocity = this.velocity / (distanceRatio * distanceRatio);
-                const minimumVelocity = this.velocity / (this.decelerationTime * this.decelerationTime);
+                const deceleratedVelocity = this.velocity * distanceRatio;
+                const minimumVelocity = this.velocity / this.decelerationTime;
                 speed = Math.max(deceleratedVelocity, minimumVelocity);
             }
 
@@ -593,6 +613,21 @@ export class Player extends GameObject {
             const norm = distance;
             this.x_speed = (dx / norm) * speed;
             this.y_speed = (dy / norm) * speed;
+
+            // Prevent overshoot — snap to destination if step exceeds remaining distance
+            if (delta_t * Math.min(speed, this.speed) >= distance) {
+                this.x = this.destination.x;
+                this.y = this.destination.y;
+                this.x_speed = 0;
+                this.y_speed = 0;
+                this.velocity = 0;
+                this.destination = null;
+                if (this.onArrivalWork) {
+                    this.onArrivalWork();
+                }
+                this.updateAttached();
+                return;
+            }
         }
 
         const normalized_x_speed = this.x_speed/this.speed;
