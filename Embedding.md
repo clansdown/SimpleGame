@@ -155,7 +155,7 @@ This empties every game collection and resets the camera position.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types (defines image, defaults). |
-| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`. |
+| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`. |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. |
@@ -378,36 +378,63 @@ set to zero so the engine's movement system doesn't interfere.
 
 ---
 
+## Arrival Callback
+
+Register a callback to fire when a `moveTo` movement completes:
+
+```typescript
+enemy.moveTo({x: 1000, y: 500}, 3.0);
+enemy.onArrival(() => {
+    console.log("Reached the target!");
+    enemy.destroy();
+});
+```
+
+The callback fires once when the object comes within 0.01 units of its
+destination. The object is snapped to the exact destination coordinates
+before the callback runs.
+
+### API reference
+
+| Member | Description |
+|---|---|
+| `onArrival(callback)` | Register a callback that fires when `moveTo` reaches its destination. |
+
+---
+
 ## Debug Logging
 
 Enable verbose console logging for all button interactions to diagnose
 hover, click, and drag issues:
 
 ```typescript
-import { setButtonDebugLogging } from "./lib/simplegame";
+import { setButtonDebugLevel } from "./lib/simplegame";
 
 initEngine(canvas, debug, false, mySetup);
-setButtonDebugLogging(true);
+setButtonDebugLevel(1);
 ```
 
 All logs are prefixed with `[ButtonDebug]` and cover:
 
-| Trigger | Log example |
-|---|---|
-| Button created | `[ButtonDebug] created text="OK" pos=(500,500) size=120x50 color=#A0A080 hover=#C0C0A0 click=#808060 bg=none icon=none` |
-| Frame hover check | `[ButtonDebug] detectHover: 5 objects, mouse (502.1, 498.3)` |
-| Mouse enters button | `[ButtonDebug] mouseOver: obj=btn at (500, 500)` |
-| Mouse leaves button | `[ButtonDebug] mouseOut: obj=btn` |
-| Button-specific hover | `[ButtonDebug] "OK": mouseOver` / `mouseOut` |
-| Button press | `[ButtonDebug] "OK": mouseDown` / `mouseUp` |
-| Button click | `[ButtonDebug] "OK": click` |
-| Drag start | `[ButtonDebug] dragStart: obj=btn at (500, 500)` |
-| Dragging | `[ButtonDebug] drag: target=btn to (510, 490)` |
-| Drag end | `[ButtonDebug] dragEnd: obj=btn at (510, 490)` |
-| Draw (when hovered/clicked) | `[ButtonDebug] draw "OK" hovered=true clicked=false fill=#C0C0A0` |
+| Trigger | Level | Log example |
+|---|---|---|
+| Button created | 1 | `[ButtonDebug] created text="OK" pos=(500,500) size=120x50 color=#A0A080 hover=#C0C0A0 click=#808060 bg=none icon=none` |
+| Frame hover check | 1 | `[ButtonDebug] detectHover: 5 objects, mouse (502.1, 498.3)` |
+| Mouse enters button | 1 | `[ButtonDebug] mouseOver: obj=btn at (500, 500)` |
+| Mouse leaves button | 1 | `[ButtonDebug] mouseOut: obj=btn` |
+| Button-specific hover | 1 | `[ButtonDebug] "OK": mouseOver` / `mouseOut` |
+| Button press | 1 | `[ButtonDebug] "OK": mouseDown` / `mouseUp` |
+| Button click | 1 | `[ButtonDebug] "OK": click` |
+| Drag start | 1 | `[ButtonDebug] dragStart: obj=btn at (500, 500)` |
+| Dragging | 1 | `[ButtonDebug] drag: target=btn to (510, 490)` |
+| Drag end | 1 | `[ButtonDebug] dragEnd: obj=btn at (510, 490)` |
+| Draw (when hovered/clicked) | 1 | `[ButtonDebug] draw "OK" hovered=true clicked=false fill=#C0C0A0` |
+| Per-object geometry | 10 | `[ButtonDebug]   obj="btn" pos=(500,500) hitbox=120x50 bounds=[440-560, 475-525] hit=true` |
+
+Set level to `10` to see the full per-object enumeration in `detectHover` and `handleMouseDown`.
 
 ### Engine API
 
 | Function | Description |
 |---|---|
-| `setButtonDebugLogging(enabled)` | Enable or disable `[ButtonDebug]` console logs. |
+| `setButtonDebugLevel(level)` | Enable `[ButtonDebug]` logs at the given verbosity level. `0` = off, `1` = events, `10` = per-object geometry. |

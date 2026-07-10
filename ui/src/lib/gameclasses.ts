@@ -225,6 +225,7 @@ export class GameObject {
     timeExistedMillis : number = 0;
 
     onDestroyWork? : ()=>void;
+    onArrivalWork? : () => void;
 
     constructor(gameclass : GameObjectClass, x : number, y : number) {
         this.gameclass = gameclass;
@@ -360,6 +361,18 @@ export class GameObject {
     }
 
     /**
+     * Registers a callback that fires when the object reaches its moveTo destination.
+     *
+     * @param callback - The function to call on arrival
+     * @example
+     *   player.moveTo({x: 500, y: 300}, 2.0);
+     *   player.onArrival(() => console.log("Arrived!"));
+     */
+    onArrival(callback: () => void): void {
+        this.onArrivalWork = callback;
+    }
+
+    /**
      * Attaches another GameObject to this one with the specified offsets and orientation offset.
      */
     attach(gameObject: GameObject, offsetX: number, offsetY: number, orientationOffset: number) {
@@ -397,6 +410,9 @@ export class GameObject {
                 this.y = this.destination.y;
                 this.velocity = 0;
                 this.destination = null;
+                if (this.onArrivalWork) {
+                    this.onArrivalWork();
+                }
                 this.updateAttached();
                 return;
             }
