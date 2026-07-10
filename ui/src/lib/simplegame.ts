@@ -269,9 +269,11 @@ function eventHandlerMouseMove(event : MouseEvent) {
     detectHover();
 
     if (dragTarget) {
-        dragTarget.x = mousePosition.x;
-        dragTarget.y = mousePosition.y;
-        dragTarget.velocity = 0;
+        if (dragTarget.dragFollowsCursor) {
+            dragTarget.x = mousePosition.x;
+            dragTarget.y = mousePosition.y;
+            dragTarget.velocity = 0;
+        }
         const handler = dragTarget.onDragMap.get(dragButton);
         if (handler) handler();
         if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] drag: target=${dragTarget.gameclass.name} to (${mousePosition.x}, ${mousePosition.y})`);

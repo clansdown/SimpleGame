@@ -205,6 +205,7 @@ export class GameObject {
 
     draggable: boolean = false;
     isDragging: boolean = false;
+    dragFollowsCursor: boolean = true;
     onDragStartMap: Map<number, () => void> = new Map();
     onDragMap: Map<number, () => void> = new Map();
     onDragEndMap: Map<number, () => void> = new Map();

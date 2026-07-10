@@ -371,6 +371,7 @@ set to zero so the engine's movement system doesn't interfere.
 | Member | Type | Description |
 |---|---|---|
 | `draggable` | `boolean` | Set to `true` to enable dragging via mouse. |
+| `dragFollowsCursor` | `boolean` | Default `true`. Set to `false` to suppress automatic position updates during drag and handle positioning yourself in `onDrag`. |
 | `isDragging` | `boolean` | Read-only; `true` while the object is being dragged. |
 | `onDragStart(button, handler)` | method | Fires once when drag begins. |
 | `onDrag(button, handler)` | method | Fires every frame while dragging. |
