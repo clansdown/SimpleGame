@@ -169,7 +169,7 @@ This empties every game collection and resets the camera position.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types (defines image, defaults). |
-| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. |
+| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `forwardVector`. |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. |
@@ -390,6 +390,28 @@ set to zero so the engine's movement system doesn't interfere.
 | `onDragStart(button, handler)` | method | Fires once when drag begins. |
 | `onDrag(button, handler)` | method | Fires every frame while dragging. |
 | `onDragEnd(button, handler)` | method | Fires when the drag ends (mouse released). |
+
+---
+
+## Sprite Mirroring
+
+Mirror the sprite horizontally based on movement direction — useful for side-view games where the character faces left when moving left and right when moving right.
+
+```typescript
+// Side-view: sprite faces right in the source image
+const rat = new Enemy(class_, x, y);
+rat.mirrorOnDirection = true;
+rat.forwardVector = [1, 0];   // "forward" = right
+```
+
+The sprite mirrors when the dot product of its movement direction and `forwardVector` is negative (movement is > 90° from forward).
+
+### API reference
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `mirrorOnDirection` | `boolean` | `false` | Enable horizontal mirror when moving backward. |
+| `forwardVector` | `vec2` | `[0, -1]` | The forward direction of the sprite. Use `[1, 0]` for side-view sprites that face right. |
 
 ---
 

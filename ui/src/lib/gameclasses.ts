@@ -168,6 +168,11 @@ export class GameObject {
     /** The y component of the orientation, to make movement computation more efficient */
     direction_y : number = 1;
 
+    /** When true, mirrors the sprite horizontally when movement direction is > 90° from forwardVector. Useful for side-view games. */
+    mirrorOnDirection: boolean = false;
+    /** The "forward" direction vector for mirrorOnDirection. Default [0, -1] matches orientation 0. Set to [1, 0] for side-view sprites that face right. */
+    forwardVector: vec2 = [0, -1];
+
     /** The current speed in the direction of travel */
     velocity : number = 0;
 
@@ -512,6 +517,14 @@ export class GameObject {
         /* Put it in the right place */
         ctx.translate(this.x - offsetX, this.y - offsetY);
         ctx.rotate(this.orientation);
+
+        /* Mirror sprite if moving backward relative to forwardVector */
+        if (this.mirrorOnDirection) {
+            const dot = this.direction_x * this.forwardVector[0] + this.direction_y * this.forwardVector[1];
+            if (dot < 0) {
+                ctx.scale(-1, 1);
+            }
+        }
 
         /* Grow In */
         if(this.growInMillis > 0 && this.timeExistedMillis < this.growInMillis) {
