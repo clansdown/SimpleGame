@@ -83,9 +83,20 @@ If you don't pass a setup function, `initEngine` uses the one exported from
 | `whenLoaded(fn)` | Fires once when all game classes have loaded their images. |
 | `everyTick(fn)` | Registers a callback invoked every frame (~40 fps). |
 | `periodically(seconds, fn)` | Registers a callback invoked at a fixed interval. |
-| `onPause(fn)` | Fires when the game is paused (p key). |
-| `onResume(fn)` | Fires when the game resumes. |
+| `onPause(fn)` | Fires when the game is paused (`pauseGame()`, `togglePause()`, or p key). |
+| `onResume(fn)` | Fires when the game resumes (`resumeGame()`, `togglePause()`, or p key). |
 | `afterDraw(fn)` | Registers a callback that runs after game objects are drawn each frame. Receives `(ctx, offsetX, offsetY)`. |
+
+---
+
+### Pause / Resume (programmatic)
+
+| Function | Description |
+|---|---|
+| `pauseGame()` | Pause the game loop immediately. No-op if already paused. |
+| `resumeGame()` | Resume the game loop immediately. No-op if already running. |
+| `togglePause()` | Toggle between paused and running. |
+| `isPaused()` | Returns `true` if the game is currently paused. |
 
 ---
 
@@ -140,7 +151,10 @@ This empties every game collection and resets the camera position.
 | `everyTick(fn)` | function | Register a per-frame callback. |
 | `periodically(seconds, fn)` | function | Register a timed callback. |
 | `whenLoaded(fn)` | function | Callback when all images are loaded. |
-| `onPause(fn)` / `onResume(fn)` | function | Pause/resume hooks. |
+| `onPause(fn)` / `onResume(fn)` | function | Pause/resume hooks. See also `pauseGame`, `resumeGame`, `togglePause`, `isPaused`. |
+| `pauseGame()` / `resumeGame()` | function | Programmatic pause/resume. |
+| `togglePause()` | function | Toggle pause state. |
+| `isPaused()` | function | Returns `boolean` — `true` if the game is paused. |
 | `onKeyDown(key, fn)` / `onKeyUp(key, fn)` | function | Keyboard input hooks. |
 | `onMouseClick(button, fn)` | function | Mouse click hook. |
 | `gameObjects` | `Set<GameObject>` | All active game objects. |

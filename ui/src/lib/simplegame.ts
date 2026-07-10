@@ -360,24 +360,7 @@ function eventHandlerKeyDown(event : KeyboardEvent) {
 
     /* Pause / Unpause */
     if(event.key == 'p') {
-        console.log("Pause / Unpause");
-
-        if(gameLoopTimeout >= 0) {
-            /* Pause */
-            clearTimeout(gameLoopTimeout);
-            gameLoopTimeout = -1;
-            for(const work of onPauseWork) {
-                work();
-            }
-        } else {
-            /* Unpause */
-            for(const work of onResumeWork) {
-                work();
-            }
-            lastGameLoopTime = Date.now() - 1000/ticksPerSecond;
-            mainGameLoop();
-        }
-
+        togglePause();
     }
 
     keyEvents.push(event);
@@ -692,6 +675,29 @@ export function onPause(work : ()=>void) {
 
 export function onResume(work : ()=>void) {
     onResumeWork.push(work);
+}
+
+export function pauseGame(): void {
+    if (gameLoopTimeout < 0) return;
+    clearTimeout(gameLoopTimeout);
+    gameLoopTimeout = -1;
+    for (const work of onPauseWork) work();
+}
+
+export function resumeGame(): void {
+    if (gameLoopTimeout >= 0) return;
+    for (const work of onResumeWork) work();
+    lastGameLoopTime = Date.now() - 1000 / ticksPerSecond;
+    mainGameLoop();
+}
+
+export function togglePause(): void {
+    if (gameLoopTimeout >= 0) pauseGame();
+    else resumeGame();
+}
+
+export function isPaused(): boolean {
+    return gameLoopTimeout < 0;
 }
 
 export function afterDraw(callback: (ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number) => void): void {
