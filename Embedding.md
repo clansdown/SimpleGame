@@ -375,3 +375,39 @@ set to zero so the engine's movement system doesn't interfere.
 | `onDragStart(button, handler)` | method | Fires once when drag begins. |
 | `onDrag(button, handler)` | method | Fires every frame while dragging. |
 | `onDragEnd(button, handler)` | method | Fires when the drag ends (mouse released). |
+
+---
+
+## Debug Logging
+
+Enable verbose console logging for all button interactions to diagnose
+hover, click, and drag issues:
+
+```typescript
+import { setButtonDebugLogging } from "./lib/simplegame";
+
+initEngine(canvas, debug, false, mySetup);
+setButtonDebugLogging(true);
+```
+
+All logs are prefixed with `[ButtonDebug]` and cover:
+
+| Trigger | Log example |
+|---|---|
+| Button created | `[ButtonDebug] created text="OK" pos=(500,500) size=120x50 color=#A0A080 hover=#C0C0A0 click=#808060 bg=none icon=none` |
+| Frame hover check | `[ButtonDebug] detectHover: 5 objects, mouse (502.1, 498.3)` |
+| Mouse enters button | `[ButtonDebug] mouseOver: obj=btn at (500, 500)` |
+| Mouse leaves button | `[ButtonDebug] mouseOut: obj=btn` |
+| Button-specific hover | `[ButtonDebug] "OK": mouseOver` / `mouseOut` |
+| Button press | `[ButtonDebug] "OK": mouseDown` / `mouseUp` |
+| Button click | `[ButtonDebug] "OK": click` |
+| Drag start | `[ButtonDebug] dragStart: obj=btn at (500, 500)` |
+| Dragging | `[ButtonDebug] drag: target=btn to (510, 490)` |
+| Drag end | `[ButtonDebug] dragEnd: obj=btn at (510, 490)` |
+| Draw (when hovered/clicked) | `[ButtonDebug] draw "OK" hovered=true clicked=false fill=#C0C0A0` |
+
+### Engine API
+
+| Function | Description |
+|---|---|
+| `setButtonDebugLogging(enabled)` | Enable or disable `[ButtonDebug]` console logs. |

@@ -35,6 +35,11 @@ let windowX = 0;
 /** The Y-offset of the window into the board */
 let windowY = 0;
 
+export let buttonDebugLogging = false;
+export function setButtonDebugLogging(enabled: boolean): void {
+    buttonDebugLogging = enabled;
+}
+
 let onLoadedWork : (()=>void)[] = [];
 let onPauseWork : (()=>void)[] = [];
 let onResumeWork : (()=>void)[] = [];
@@ -110,12 +115,18 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
     keyMap.set(key, true);
     if (initial) {
         mouseDownTimes.set(key, Date.now());
+        let hitCount = 0;
         for (const obj of gameObjects) {
             if (isPointInHitbox(obj, boardX, boardY)) {
+                hitCount++;
                 const handler = obj.onMouseDownMap.get(button);
-                if (handler) handler(event);
+                if (handler) {
+                    handler(event);
+                    if (buttonDebugLogging) console.log(`[ButtonDebug] handleMouseDown: hit obj gameclass=${obj.gameclass.name} x=${obj.x} y=${obj.y}`);
+                }
             }
         }
+        if (buttonDebugLogging) console.log(`[ButtonDebug] handleMouseDown: button=${button} checked ${gameObjects.size} objects, ${hitCount} hit`);
     }
 }
 
@@ -124,17 +135,24 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
     keyMap.set(key, false);
     let clickHandled = false;
     if (initial) {
+        let hitCount = 0;
         for (const obj of gameObjects) {
             if (isPointInHitbox(obj, boardX, boardY)) {
+                hitCount++;
                 const upHandler = obj.onMouseUpMap.get(button);
-                if (upHandler) upHandler(event);
+                if (upHandler) {
+                    upHandler(event);
+                    if (buttonDebugLogging) console.log(`[ButtonDebug] handleMouseUp: up obj=${obj.gameclass.name} button=${button}`);
+                }
                 const clickHandler = obj.onClickMap.get(button);
                 if (clickHandler) {
                     clickHandler(event);
                     clickHandled = true;
+                    if (buttonDebugLogging) console.log(`[ButtonDebug] handleMouseUp: click obj=${obj.gameclass.name} button=${button}`);
                 }
             }
         }
+        if (buttonDebugLogging) console.log(`[ButtonDebug] handleMouseUp: button=${button} checked ${gameObjects.size} objects, ${hitCount} hit`);
         const now = Date.now();
         if (!clickHandled && (now - (mouseDownTimes.get(key) || 0)) <= 600) {
             const callback = onMouseClickMap.get(button);
@@ -241,6 +259,7 @@ function eventHandlerMouseMove(event : MouseEvent) {
         dragTarget.velocity = 0;
         const handler = dragTarget.onDragMap.get(dragButton);
         if (handler) handler();
+        if (buttonDebugLogging) console.log(`[ButtonDebug] drag: target=${dragTarget.gameclass.name} to (${mousePosition.x}, ${mousePosition.y})`);
     }
 }
 
@@ -258,6 +277,7 @@ function eventHandlerMouseDown(event : MouseEvent) {
                 obj.velocity = 0;
                 const handler = obj.onDragStartMap.get(0);
                 if (handler) handler();
+                if (buttonDebugLogging) console.log(`[ButtonDebug] dragStart: obj=${obj.gameclass.name} at (${boardX}, ${boardY})`);
                 break;
             }
         }
@@ -280,6 +300,7 @@ function eventHandlerMouseUp(event : MouseEvent) {
         if ((dragButton === 0 && !(event.buttons & 1)) ||
             (dragButton === 1 && !(event.buttons & 4)) ||
             (dragButton === 2 && !(event.buttons & 2))) {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] dragEnd: obj=${dragTarget.gameclass.name} at (${dragTarget.x}, ${dragTarget.y})`);
             dragTarget.isDragging = false;
             const handler = dragTarget.onDragEndMap.get(dragButton);
             if (handler) handler();
@@ -593,13 +614,16 @@ function userInput() {
 }
 
 function detectHover() {
+    if (buttonDebugLogging) console.log(`[ButtonDebug] detectHover: ${gameObjects.size} objects, mouse (${mousePosition.x}, ${mousePosition.y})`);
     for (const obj of gameObjects) {
         const wasHovered = obj.isHovered;
         obj.isHovered = isPointInHitbox(obj, mousePosition.x, mousePosition.y);
         if (obj.isHovered && !wasHovered) {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] mouseOver: obj=${obj.gameclass.name} at (${obj.x}, ${obj.y})`);
             const handler = obj.onMouseOverMap.get(0);
             if (handler) handler(new MouseEvent('mouseover'));
         } else if (!obj.isHovered && wasHovered) {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] mouseOut: obj=${obj.gameclass.name}`);
             const handler = obj.onMouseOutMap.get(0);
             if (handler) handler(new MouseEvent('mouseout'));
         }

@@ -1,5 +1,5 @@
 import { GameObject, GameObjectClass } from "./gameclasses";
-import { getMousePosition } from "./simplegame";
+import { getMousePosition, buttonDebugLogging } from "./simplegame";
 import type { Position2D } from "./util";
 
 export class ButtonClass extends GameObjectClass {
@@ -47,6 +47,8 @@ export class Button extends GameObject {
         this.hoverColor = `#${Math.min(255, r + 32).toString(16).padStart(2, '0')}${Math.min(255, g + 32).toString(16).padStart(2, '0')}${Math.min(255, b + 32).toString(16).padStart(2, '0')}`;
         this.clickColor = `#${Math.max(0, r - 32).toString(16).padStart(2, '0')}${Math.max(0, g - 32).toString(16).padStart(2, '0')}${Math.max(0, b - 32).toString(16).padStart(2, '0')}`;
 
+        if (buttonDebugLogging) console.log(`[ButtonDebug] created text="${text}" pos=(${x},${y}) size=${width}x${height} color=${color} hover=${this.hoverColor} click=${this.clickColor} bg=${backgroundImage || "none"} icon=${iconFile || "none"}`);
+
         if (backgroundImage) {
             this.backgroundImage = new Image();
             this.backgroundImage.onerror = () => { this.backgroundImage = undefined; };
@@ -66,29 +68,39 @@ export class Button extends GameObject {
         this.hitboxYOffset = 0;
 
         // Mouseover highlight
-        this.onMouseOver(0, () => {});
-        this.onMouseOut(0, () => {});
+        this.onMouseOver(0, () => {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}": mouseOver`); });
+        this.onMouseOut(0, () => {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}": mouseOut`); });
 
         // Click press indication
-        this.onMouseDown(0, () => { this.isClicked = true; });
-        this.onMouseUp(0, () => { this.isClicked = false; });
+        this.onMouseDown(0, () => {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}": mouseDown`);
+            this.isClicked = true; });
+        this.onMouseUp(0, () => {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}": mouseUp`);
+            this.isClicked = false; });
 
         // Automatically install onClick handler for left mouse button
         this.onClick(0, (event) => {
+            if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}": click`);
             this.isClicked = false;
             if (this.onClickCallback) this.onClickCallback();
         });
     }
 
     setText(text: string) {
+        if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}" -> setText("${text}")`);
         this.text = text;
     }
 
     setOnClick(callback: () => void) {
+        if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}": onClick registered`);
         this.onClickCallback = callback;
     }
 
     setIcon(iconFile: string) {
+        if (buttonDebugLogging) console.log(`[ButtonDebug] "${this.text}": setIcon("${iconFile}")`);
         this.icon = new Image();
         this.icon.onerror = () => { this.icon = undefined; };
         this.icon.src = iconFile;
@@ -145,6 +157,10 @@ export class Button extends GameObject {
             ctx.textBaseline = "middle";
             const textX = textOffsetX > 0 ? -this.width / 2 + textOffsetX + (this.width - textOffsetX) / 2 : 0;
             ctx.fillText(this.text, textX, 0);
+        }
+
+        if (buttonDebugLogging && (this.isHovered || this.isClicked)) {
+            console.log(`[ButtonDebug] draw "${this.text}" hovered=${this.isHovered} clicked=${this.isClicked} fill=${(this.backgroundImage && this.backgroundImage.complete) ? "image" : fillColor}`);
         }
 
         ctx.restore();
