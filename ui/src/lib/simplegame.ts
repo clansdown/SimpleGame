@@ -197,6 +197,8 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
     debugElement = debugDiv;
     debugElement.innerHTML = "";
     canvas = screenCanvas;
+    windowWidth = canvas.width;
+    windowHeight = canvas.height;
     attachEventListeners();
 
     if (!clickToBegin) {
