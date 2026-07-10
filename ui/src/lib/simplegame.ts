@@ -117,13 +117,23 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
         mouseDownTimes.set(key, Date.now());
         let hitCount = 0;
         for (const obj of gameObjects) {
-            if (isPointInHitbox(obj, boardX, boardY)) {
+            const hit = isPointInHitbox(obj, boardX, boardY);
+            if (hit) {
                 hitCount++;
                 const handler = obj.onMouseDownMap.get(button);
                 if (handler) {
                     handler(event);
-                    if (buttonDebugLogging) console.log(`[ButtonDebug] handleMouseDown: hit obj gameclass=${obj.gameclass.name} x=${obj.x} y=${obj.y}`);
                 }
+            }
+            if (buttonDebugLogging) {
+                console.log(
+                    `[ButtonDebug]   mousedown obj="${obj.gameclass.name}" ` +
+                    `pos=(${obj.x.toFixed(1)},${obj.y.toFixed(1)}) ` +
+                    `hitbox=${obj.hitboxWidth}x${obj.hitboxHeight} ` +
+                    `offset=(${obj.hitboxXOffset},${obj.hitboxYOffset}) ` +
+                    `mouse=(${boardX.toFixed(1)},${boardY.toFixed(1)}) ` +
+                    `hit=${hit}`
+                );
             }
         }
         if (buttonDebugLogging) console.log(`[ButtonDebug] handleMouseDown: button=${button} checked ${gameObjects.size} objects, ${hitCount} hit`);
@@ -621,6 +631,21 @@ function detectHover() {
     for (const obj of gameObjects) {
         const wasHovered = obj.isHovered;
         obj.isHovered = isPointInHitbox(obj, mousePosition.x, mousePosition.y);
+        if (buttonDebugLogging) {
+            const hit = obj.isHovered;
+            const left = obj.x + obj.hitboxXOffset - obj.hitboxWidth / 2;
+            const right = obj.x + obj.hitboxXOffset + obj.hitboxWidth / 2;
+            const top = obj.y + obj.hitboxYOffset - obj.hitboxHeight / 2;
+            const bottom = obj.y + obj.hitboxYOffset + obj.hitboxHeight / 2;
+            console.log(
+                `[ButtonDebug]   obj="${obj.gameclass.name}" ` +
+                `pos=(${obj.x.toFixed(1)},${obj.y.toFixed(1)}) ` +
+                `hitbox=${obj.hitboxWidth}x${obj.hitboxHeight} ` +
+                `offset=(${obj.hitboxXOffset},${obj.hitboxYOffset}) ` +
+                `bounds=[${left.toFixed(1)}-${right.toFixed(1)}, ${top.toFixed(1)}-${bottom.toFixed(1)}] ` +
+                `hit=${hit}`
+            );
+        }
         if (obj.isHovered && !wasHovered) {
             if (buttonDebugLogging) console.log(`[ButtonDebug] mouseOver: obj=${obj.gameclass.name} at (${obj.x}, ${obj.y})`);
             const handler = obj.onMouseOverMap.get(0);
