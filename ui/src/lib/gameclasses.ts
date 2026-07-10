@@ -324,6 +324,27 @@ export class GameObject {
         return [this.direction_x, this.direction_y];
     }
 
+    logMovement(): void {
+        const destDist = this.destination
+            ? Math.sqrt(
+                (this.destination.x - this.x) ** 2 +
+                (this.destination.y - this.y) ** 2
+              ).toFixed(2)
+            : "none";
+        console.log(
+            `[MoveDebug] "${this.gameclass.name}" ` +
+            `pos=(${this.x.toFixed(1)}, ${this.y.toFixed(1)}) ` +
+            `vel=${this.velocity.toFixed(2)} ` +
+            `dir=(${this.direction_x.toFixed(3)}, ${this.direction_y.toFixed(3)}) ` +
+            `dest=${this.destination ? `(${this.destination.x}, ${this.destination.y})` : "null"} ` +
+            `dist=${destDist} ` +
+            `decelDist=${this.decelerationDistance} ` +
+            `bound=${this.boundToBoard} ` +
+            `destroyOff=${this.destroyIfOffBoard} ` +
+            `drag=${this.draggable}/${this.isDragging}`
+        );
+    }
+
     /**
      * Moves the object by the given vector
      */

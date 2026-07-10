@@ -169,7 +169,7 @@ This empties every game collection and resets the camera position.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types (defines image, defaults). |
-| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`. |
+| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. |
