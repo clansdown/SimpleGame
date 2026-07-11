@@ -25,6 +25,7 @@ export class Button extends GameObject {
     iconSize: number = 16;
     iconPadding: number = 8;
     isClicked: boolean = false;
+    disabled: boolean = false;
     onClickCallback?: () => void;
 
     constructor(gameclass: ButtonClass, x: number, y: number, text: string,
@@ -69,20 +70,25 @@ export class Button extends GameObject {
 
         // Mouseover highlight
         this.onMouseOver(0, () => {
+            if (this.disabled) return;
             if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseOver`); });
         this.onMouseOut(0, () => {
+            if (this.disabled) return;
             if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseOut`); });
 
         // Click press indication
         this.onMouseDown(0, () => {
+            if (this.disabled) return;
             if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseDown`);
             this.isClicked = true; });
         this.onMouseUp(0, () => {
+            if (this.disabled) return;
             if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseUp`);
             this.isClicked = false; });
 
         // Automatically install onClick handler for left mouse button
         this.onClick(0, (event) => {
+            if (this.disabled) return;
             if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": click`);
             this.isClicked = false;
             if (this.onClickCallback) this.onClickCallback();
@@ -97,6 +103,15 @@ export class Button extends GameObject {
     setOnClick(callback: () => void) {
         if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": onClick registered`);
         this.onClickCallback = callback;
+    }
+
+    setDisabled(disabled: boolean): void {
+        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": setDisabled(${disabled})`);
+        this.disabled = disabled;
+    }
+
+    canDrag(): boolean {
+        return !this.disabled;
     }
 
     setIcon(iconFile: string) {
@@ -118,10 +133,12 @@ export class Button extends GameObject {
 
         // Determine fill color based on state
         let fillColor = this.color;
-        if (this.isClicked) {
-            fillColor = this.clickColor;
-        } else if (this.isHovered) {
-            fillColor = this.hoverColor;
+        if (!this.disabled) {
+            if (this.isClicked) {
+                fillColor = this.clickColor;
+            } else if (this.isHovered) {
+                fillColor = this.hoverColor;
+            }
         }
 
         // Draw background
@@ -157,6 +174,12 @@ export class Button extends GameObject {
             ctx.textBaseline = "middle";
             const textX = textOffsetX > 0 ? -this.width / 2 + textOffsetX + (this.width - textOffsetX) / 2 : 0;
             ctx.fillText(this.text, textX, 0);
+        }
+
+        // Gray overlay when disabled
+        if (this.disabled) {
+            ctx.fillStyle = "rgba(128, 128, 128, 0.4)";
+            ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
         }
 
         if (buttonDebugLevel >= 1 && (this.isHovered || this.isClicked)) {

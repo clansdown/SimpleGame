@@ -306,7 +306,7 @@ function eventHandlerMouseDown(event : MouseEvent) {
 
     if (event.buttons & 1) {
         for (const obj of gameObjects) {
-            if (obj.draggable && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY)) {
+            if (obj.draggable && obj.canDrag() && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY)) {
                 dragCandidate = obj;
                 dragButton = 0;
                 dragCandidateStartX = boardX;

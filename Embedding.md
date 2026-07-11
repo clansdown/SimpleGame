@@ -207,7 +207,7 @@ This empties every game collection and resets the camera position.
 
 | Export | Description |
 |---|---|
-| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight and click press indication. |
+| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight, click press indication, and disabled state. |
 | `Row` | Horizontal layout container. |
 | `Column` | Vertical layout container. |
 | `Page` | Page with optional border. |
@@ -259,6 +259,17 @@ Adjust icon rendering:
 button.iconSize = 24;       // default 16
 button.iconPadding = 12;    // default 8
 ```
+
+### Disabled state
+
+Buttons can be disabled to prevent interaction and visually grey them out:
+
+```typescript
+button.setDisabled(true);   // greyed out, no clicks, no drags, no hover
+button.setDisabled(false);  // normal
+```
+
+When disabled: base color is used (no hover/click tints), a 40% gray overlay is drawn, and all mouse events (hover, click, drag) are suppressed via `canDrag()` returning `false`.
 
 ### Mouseover events
 
@@ -391,6 +402,7 @@ set to zero so the engine's movement system doesn't interfere.
 | `onDragStart(button, handler)` | method | Fires once when drag begins. |
 | `onDrag(button, handler)` | method | Fires every frame while dragging. |
 | `onDragEnd(button, handler)` | method | Fires when the drag ends (mouse released). |
+| `canDrag()` | method | Override to prevent drag origination. Default returns `true`. `Button` overrides to return `!disabled`. |
 
 ---
 
