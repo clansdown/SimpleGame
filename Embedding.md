@@ -169,7 +169,7 @@ This empties every game collection and resets the camera position.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types (defines image, defaults). |
-| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `forwardVector`. |
+| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `spriteForwardVector`. |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. |
@@ -393,25 +393,29 @@ set to zero so the engine's movement system doesn't interfere.
 
 ---
 
-## Sprite Mirroring
+## Sprite Alignment
 
-Mirror the sprite horizontally based on movement direction — useful for side-view games where the character faces left when moving left and right when moving right.
+The engine automatically aligns the sprite image so its `spriteForwardVector` points in the object's facing direction (`direction_x`, `direction_y`). For side-view games, set `defaultSpriteForwardVector` on the class and enable `mirrorOnDirection` so the sprite flips instead of rotating past 90°.
 
 ```typescript
-// Side-view: sprite faces right in the source image
-const rat = new Enemy(class_, x, y);
-rat.mirrorOnDirection = true;
-rat.forwardVector = [1, 0];   // "forward" = right
+// On the class (all instances inherit):
+const ratClass = new EnemyClass("dire_rat", "rat.png");
+ratClass.defaultSpriteForwardVector = [1, 0];  // sprite faces right
+
+// On the instance:
+const rat = ratClass.spawn(100, 100);
+rat.mirrorOnDirection = true;                   // flip when moving left
 ```
 
-The sprite mirrors when the dot product of its movement direction and `forwardVector` is negative (movement is > 90° from forward).
+The transform is: compute the signed angle from `spriteForwardVector` to the facing direction. If the angle exceeds ±90° and `mirrorOnDirection` is true, mirror the sprite horizontally and rotate by the residual. Otherwise rotate by the full angle.
 
 ### API reference
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `mirrorOnDirection` | `boolean` | `false` | Enable horizontal mirror when moving backward. |
-| `forwardVector` | `vec2` | `[0, -1]` | The forward direction of the sprite. Use `[1, 0]` for side-view sprites that face right. |
+| Field | Type | Default | Location | Description |
+|---|---|---|---|---|
+| `defaultSpriteForwardVector` | `vec2` | `[0, -1]` | `GameObjectClass` | The direction the raw sprite image faces. Set once after constructing the class. |
+| `spriteForwardVector` | `vec2` | inherited from class | `GameObject` | Per-instance override (rarely needed). |
+| `mirrorOnDirection` | `boolean` | `false` | `GameObject` | Enable mirror when the required rotation > 90°. |
 
 ---
 

@@ -15,6 +15,8 @@ export class GameObjectClass {
     hitboxYOffset : number = 0;
     loaded : boolean = false;
     defaultHitpoints : number = 1;
+    /** The direction the raw sprite image faces. [0, -1] = up, [1, 0] = right, etc. Inherited by all spawned instances. */
+    defaultSpriteForwardVector: vec2 = [0, -1];
 
     parent : GameObjectClass|null;
     children : Set<GameObjectClass> = new Set();
@@ -168,10 +170,10 @@ export class GameObject {
     /** The y component of the orientation, to make movement computation more efficient */
     direction_y : number = 1;
 
-    /** When true, mirrors the sprite horizontally when movement direction is > 90° from forwardVector. Useful for side-view games. */
+    /** When true, mirrors the sprite horizontally when movement direction is > 90° from spriteForwardVector. Useful for side-view games. */
     mirrorOnDirection: boolean = false;
-    /** The "forward" direction vector for mirrorOnDirection. Default [0, -1] matches orientation 0. Set to [1, 0] for side-view sprites that face right. */
-    forwardVector: vec2 = [0, -1];
+    /** The direction the raw sprite image faces. Inherited from class defaultSpriteForwardVector at spawn. [0, -1] = up, [1, 0] = right, etc. */
+    spriteForwardVector: vec2 = [0, -1];
 
     /** The current speed in the direction of travel */
     velocity : number = 0;
@@ -246,6 +248,7 @@ export class GameObject {
         this.hitboxYOffset = gameclass.hitboxYOffset;
         this.orientation = 0;
         this.speed = gameclass.defaultSpeed;
+        this.spriteForwardVector = [...gameclass.defaultSpriteForwardVector];
     }
 
     onClick(button: number, handler: (event: MouseEvent) => void) {
@@ -516,13 +519,31 @@ export class GameObject {
         ctx.save();
         /* Put it in the right place */
         ctx.translate(this.x - offsetX, this.y - offsetY);
-        ctx.rotate(this.orientation);
 
-        /* Mirror sprite if moving backward relative to forwardVector */
-        if (this.mirrorOnDirection) {
-            const dot = this.direction_x * this.forwardVector[0] + this.direction_y * this.forwardVector[1];
-            if (dot < 0) {
+        /* Align sprite forward vector with facing direction */
+        {
+            const fwd = this.spriteForwardVector;
+            const facing_norm = Math.sqrt(
+                this.direction_x * this.direction_x +
+                this.direction_y * this.direction_y
+            );
+            const facingX = facing_norm > 0 ? this.direction_x / facing_norm : fwd[0];
+            const facingY = facing_norm > 0 ? this.direction_y / facing_norm : fwd[1];
+
+            const rawAngle = Math.atan2(
+                fwd[0] * facingY - fwd[1] * facingX,
+                fwd[0] * facingX + fwd[1] * facingY
+            );
+
+            if (this.mirrorOnDirection && Math.abs(rawAngle) > Math.PI / 2) {
                 ctx.scale(-1, 1);
+                const mirrorAngle = Math.atan2(
+                    -fwd[0] * facingY - fwd[1] * facingX,
+                    -fwd[0] * facingX + fwd[1] * facingY
+                );
+                ctx.rotate(mirrorAngle);
+            } else {
+                ctx.rotate(rawAngle);
             }
         }
 
