@@ -60,7 +60,7 @@ let dragButton : number = -1;
 let dragCandidate : GameObject | null = null;
 let dragCandidateStartX : number = 0;
 let dragCandidateStartY : number = 0;
-const DRAG_THRESHOLD = 5;
+const DRAG_THRESHOLD = 10;
 
 let stillNeedInitialMouseClick : boolean = true;
 
@@ -159,7 +159,7 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
                     if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: up obj=${obj.gameclass.name} button=${button}`);
                 }
                 const clickHandler = obj.onClickMap.get(button);
-                if (clickHandler) {
+                if (clickHandler && !obj.isDragging) {
                     clickHandler(event);
                     clickHandled = true;
                     if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: click obj=${obj.gameclass.name} button=${button}`);

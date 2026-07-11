@@ -173,7 +173,7 @@ This empties every game collection and resets the camera position.
 | `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `spriteForwardVector`. |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
-| `ProjectileClass` / `Projectile` | class | Projectile object. |
+| `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
 | `ItemClass` / `Item` | class | Collectible / neutral object. |
 | `EffectClass` / `Effect` | class | Visual effect (animated, auto-destroy). |
 | `TextClass` / `Text` | class | Text overlay. |

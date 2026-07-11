@@ -541,7 +541,7 @@ export class GameObject {
 
             if (this.mirrorOnDirection && Math.abs(rawAngle) > Math.PI / 2) {
                 ctx.scale(-1, 1);
-                const mirrorAngle = Math.atan2(
+                const mirrorAngle = -Math.atan2(
                     -fwd[0] * facingY - fwd[1] * facingX,
                     -fwd[0] * facingX + fwd[1] * facingY
                 );
@@ -806,10 +806,28 @@ export class ProjectileClass extends GameObjectClass {
 }
 
 export class Projectile extends GameObject {
+    alignToTravel: boolean = true;
+
     constructor(gameclass : ProjectileClass, x : number, y : number) {
         super(gameclass, x, y);
         this.destroyIfOffBoard = true;
         this.boundToBoard = false;
+    }
+
+    doMovement(delta_t: number): void {
+        const prevX = this.x;
+        const prevY = this.y;
+        super.doMovement(delta_t);
+        if (this.alignToTravel) {
+            const dx = this.x - prevX;
+            const dy = this.y - prevY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0.001) {
+                this.direction_x = dx / dist;
+                this.direction_y = dy / dist;
+                this.orientation = Math.atan2(dy, dx) + Math.PI / 2;
+            }
+        }
     }
 
     destroy(): void {
