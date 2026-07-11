@@ -144,7 +144,8 @@ This empties every game collection and resets the camera position.
 | `setBoardSize(width, height)` | function | Set the virtual world size. |
 | `setSize(width, height)` | function | Alias for `setBoardSize`. |
 | `setCameraFollowsPlayer(follows)` | function | Toggle camera tracking. |
-| `setBackground(tiles, whenLoaded?)` | function | Set tiled background from image URLs. |
+| `setBackground(tiles, whenLoaded?)` | function | Set background from image URLs. |
+| `setBackgroundMode(mode)` | function | `"tile"` (default, scrolls with camera) or `"stretch"` (fills viewport, no scroll). |
 | `clear()` | function | Remove all game objects and reset state. |
 | `debug(text)` | function | Write to the debug div. |
 | `getMousePosition()` | function | Get current mouse coordinates on the board. |

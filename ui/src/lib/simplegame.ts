@@ -68,7 +68,7 @@ let cameraFollowsPlayer : boolean = true;
 let maxCameraMovementPerSecond = 100;
 
 let backgroundTileset : HTMLImageElement[] = [];
-
+let backgroundMode: "tile" | "stretch" = "tile";
 export class CollisionAction {
     sourceGameClass : GameObjectClass|null;
     sourceGameObject : GameObject|null;
@@ -490,16 +490,20 @@ function draw() {
 
     /* Background */
     if(backgroundTileset.length > 0) {
-        const tileWidth = backgroundTileset[0].width;
-        const tileHeight = backgroundTileset[0].height;
+        if(backgroundMode === "stretch") {
+            ctx.drawImage(backgroundTileset[0], 0, 0, canvas.width, canvas.height);
+        } else {
+            const tileWidth = backgroundTileset[0].width;
+            const tileHeight = backgroundTileset[0].height;
 
-        const base_x = Math.floor(windowX/tileWidth)*tileWidth;
-        const base_y = Math.floor(windowY/tileHeight)*tileHeight;
+            const base_x = Math.floor(windowX/tileWidth)*tileWidth;
+            const base_y = Math.floor(windowY/tileHeight)*tileHeight;
 
-        for(let x = base_x; x <= base_x + windowWidth + tileWidth; x += tileWidth) {
-            for(let y = base_y; y <= base_y + windowHeight + tileHeight; y += tileHeight) {
-                const img = backgroundTileset[Math.floor(randFromCoordinates(Math.floor(x/tileWidth), Math.floor(y/tileWidth))*backgroundTileset.length)];
-                ctx.drawImage(img, x-windowX, y-windowY);
+            for(let x = base_x; x <= base_x + windowWidth + tileWidth; x += tileWidth) {
+                for(let y = base_y; y <= base_y + windowHeight + tileHeight; y += tileHeight) {
+                    const img = backgroundTileset[Math.floor(randFromCoordinates(Math.floor(x/tileWidth), Math.floor(y/tileWidth))*backgroundTileset.length)];
+                    ctx.drawImage(img, x-windowX, y-windowY);
+                }
             }
         }
     }
@@ -794,6 +798,10 @@ export function onButtonUp(button : number, callback : ()=>void) {
     
 }
 
+
+export function setBackgroundMode(mode: "tile" | "stretch"): void {
+    backgroundMode = mode;
+}
 
 /**
  * Sets the background to be one or more tiles (they must be the same size) given by file names
