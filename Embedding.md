@@ -209,7 +209,7 @@ This empties every game collection and resets the camera position.
 |---|---|
 | `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight, click press indication, disabled state, and configurable icon layout (`IconLayout` type). |
 | `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
-| `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`. |
+| `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`. |
 | `Row` | Horizontal layout container. |
 | `Column` | Vertical layout container. |
 | `Page` | Page with optional border. |
@@ -221,23 +221,38 @@ This empties every game collection and resets the camera position.
 
 ### Creating a button
 
+Buttons auto-size to fit their content (icon + text). Provide `width` / `height` in `ButtonOptions` to override.
+
 ```typescript
 import { ButtonClass } from "./lib/button";
 
 const buttonClass = new ButtonClass("btn");
 
+// Auto-sized text-only button
+buttonClass.spawn(100, 100, "Play");
+
+// Auto-sized with icon above text (default layout)
+buttonClass.spawn(100, 100, "Settings", "gear.png");
+
+// Override width (uniform buttons), let height auto-compute
+buttonClass.spawn(100, 100, "OK", "check.png", {
+    width: 120,
+});
+
+// Full control
 buttonClass.spawn(
-    x, y,                    // position (centre)
-    "Click Me",              // text (optional, null for icon-only)
-    "icon.png",              // iconFile (optional, null for text-only)
-    {                        // ButtonOptions (optional)
-        width: 120,
-        height: 50,
+    100, 100,
+    "Click Me",
+    "icon.png",
+    {
+        width: 140,
+        height: 60,
         color: "#A0A080",
-        iconWidth: 16,
-        iconHeight: 16,
-        iconPadding: 8,
-        iconLayout: "left",  // "left" | "right" | "above" | "below"
+        iconLayout: "left",
+        iconWidth: 20,
+        iconHeight: 20,
+        iconPadding: 10,
+        backgroundOpacity: 0.85,
     },
 );
 ```
@@ -262,13 +277,48 @@ button.setIconHeight(24);
 button.setIconPadding(12);
 ```
 
+### Auto-sizing
+
+Buttons compute their own size from content. The auto-size logic uses these
+approximations for 16px Arial:
+
+| Constant | Value | Used for |
+|---|---|---|
+| `EST_CHAR_WIDTH` | 8px | Average character width |
+| `EST_TEXT_HEIGHT` | 20px | Line height |
+| `CONTENT_PAD` | 12px | Minimum edge padding |
+
+When you provide `width` or `height` in `ButtonOptions`, it overrides that
+dimension (the other still auto-computes). Useful for uniform-width buttons.
+
+The button will never shrink below 40×30 pixels.
+
+### Background opacity
+
+Control the transparency of the background layer (fill, image, border) without
+affecting the icon, text, or disabled overlay:
+
+```typescript
+buttonClass.spawn(100, 100, "Start", "play.png", {
+    backgroundOpacity: 0.8,
+});
+```
+
+Default is `1.0` (fully opaque). Values between `0` and `1` are valid.
+
+### Icon loading fallback
+
+If an icon or background image fails to load, the button logs an error to the
+console and substitutes a 1×1 transparent GIF. The icon still reserves layout
+space — there's no visual jump when the real image loads.
+
 ### Examples
 
 ```typescript
-// Text-only button
+// Text-only button (auto-sized)
 buttonClass.spawn(100, 100, "Play");
 
-// Icon-only button
+// Icon-only button (auto-sized)
 buttonClass.spawn(100, 100, null, "close.png");
 
 // Text + icon with custom layout
@@ -277,6 +327,10 @@ buttonClass.spawn(100, 100, "Settings", "gear.png", {
     iconWidth: 20,
     iconHeight: 20,
 });
+
+// Uniform width, auto height
+buttonClass.spawn(100, 200, "Save", "disk.png", { width: 140 });
+buttonClass.spawn(100, 400, "Delete", "trash.png", { width: 140 });
 ```
 
 ### Hover & click visuals
@@ -322,8 +376,14 @@ The `isHovered` boolean is updated every frame for all game objects.
 | `setIcon(iconFile)` | Set or replace the icon image. |
 | `setIconWidth(w)` | Icon render width in pixels (default 16). |
 | `setIconHeight(h)` | Icon render height in pixels (default 16). |
-| `setIconPadding(pad)` | Gap between icon and text / button edge (default 8). |
+| `setIconPadding(pad)` | Gap between icon and text (default 8). |
 | `setIconLayout(layout)` | `"left"` \| `"right"` \| `"above"` (default) \| `"below"`. |
+
+`ButtonOptions` fields: `width`, `height`, `backgroundImage`, `color`,
+`iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`.
+
+Buttons auto-size from content. Set `width`/`height` to override. Minimum
+40×30. `backgroundOpacity` (default 1.0) controls background layer alpha.
 
 ---
 
