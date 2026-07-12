@@ -207,7 +207,9 @@ This empties every game collection and resets the camera position.
 
 | Export | Description |
 |---|---|
-| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight, click press indication, and disabled state. |
+| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight, click press indication, disabled state, and configurable icon layout (`IconLayout` type). |
+| `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
+| `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`. |
 | `Row` | Horizontal layout container. |
 | `Column` | Vertical layout container. |
 | `Page` | Page with optional border. |
@@ -226,12 +228,55 @@ const buttonClass = new ButtonClass("btn");
 
 buttonClass.spawn(
     x, y,                    // position (centre)
-    "Click Me",              // text
-    120, 50,                 // width, height
-    undefined,               // backgroundImage (optional)
-    "#A0A080",               // color
-    "icon.png"               // iconFile (optional)
+    "Click Me",              // text (optional, null for icon-only)
+    "icon.png",              // iconFile (optional, null for text-only)
+    {                        // ButtonOptions (optional)
+        width: 120,
+        height: 50,
+        color: "#A0A080",
+        iconWidth: 16,
+        iconHeight: 16,
+        iconPadding: 8,
+        iconLayout: "left",  // "left" | "right" | "above" | "below"
+    },
 );
+```
+
+### Icon layout
+
+The icon can be positioned relative to the text:
+
+| Layout  | Description |
+|---------|-------------|
+| `"above"` (default) | Icon above text, centred horizontally |
+| `"below"` | Icon below text, centred horizontally |
+| `"left"` | Icon to the left of text, vertically centred |
+| `"right"` | Icon to the right of text, vertically centred |
+
+Set via `ButtonOptions` on spawn or at runtime:
+
+```typescript
+button.setIconLayout("right");
+button.setIconWidth(24);
+button.setIconHeight(24);
+button.setIconPadding(12);
+```
+
+### Examples
+
+```typescript
+// Text-only button
+buttonClass.spawn(100, 100, "Play");
+
+// Icon-only button
+buttonClass.spawn(100, 100, null, "close.png");
+
+// Text + icon with custom layout
+buttonClass.spawn(100, 100, "Settings", "gear.png", {
+    iconLayout: "left",
+    iconWidth: 20,
+    iconHeight: 20,
+});
 ```
 
 ### Hover & click visuals
@@ -244,21 +289,6 @@ button.clickColor = "#707050";
 ```
 
 For buttons with a `backgroundImage`, hover adds a semi-transparent white overlay and click adds a semi-transparent black overlay.
-
-### Icons
-
-Pass an icon file path to `spawn()` or call `setIcon()`:
-
-```typescript
-button.setIcon("path/to/icon.png");
-```
-
-Adjust icon rendering:
-
-```typescript
-button.iconSize = 24;       // default 16
-button.iconPadding = 12;    // default 8
-```
 
 ### Disabled state
 
@@ -281,6 +311,19 @@ obj.onMouseOut(0, () => console.log("mouse left"));
 ```
 
 The `isHovered` boolean is updated every frame for all game objects.
+
+### Button API reference
+
+| Member | Description |
+|---|---|
+| `setText(text)` | Change the button label. |
+| `setOnClick(callback)` | Register a click handler. |
+| `setDisabled(disabled)` | Enable/disable the button. |
+| `setIcon(iconFile)` | Set or replace the icon image. |
+| `setIconWidth(w)` | Icon render width in pixels (default 16). |
+| `setIconHeight(h)` | Icon render height in pixels (default 16). |
+| `setIconPadding(pad)` | Gap between icon and text / button edge (default 8). |
+| `setIconLayout(layout)` | `"left"` \| `"right"` \| `"above"` (default) \| `"below"`. |
 
 ---
 

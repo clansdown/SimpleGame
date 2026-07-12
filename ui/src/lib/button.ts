@@ -2,14 +2,27 @@ import { GameObject, GameObjectClass } from "./gameclasses";
 import { getMousePosition, buttonDebugLevel } from "./simplegame";
 import type { Position2D } from "./util";
 
+export type IconLayout = "left" | "right" | "above" | "below";
+
+export interface ButtonOptions {
+    width?: number;
+    height?: number;
+    backgroundImage?: string;
+    color?: string;
+    iconWidth?: number;
+    iconHeight?: number;
+    iconPadding?: number;
+    iconLayout?: IconLayout;
+}
+
 export class ButtonClass extends GameObjectClass {
     constructor(name: string, image_file: string | null = null, parent: GameObjectClass | null = null) {
         super(name, image_file, parent);
     }
 
-    spawn(x: number, y: number, text: string = "", width: number = 100, height: number = 50,
-          backgroundImage?: string, color: string = "#A0A080", iconFile?: string): Button {
-        const button = new Button(this, x, y, text, width, height, backgroundImage, color, iconFile);
+    spawn(x: number, y: number, text?: string | null, iconFile?: string | null,
+          options?: ButtonOptions): Button {
+        const button = new Button(this, x, y, text, iconFile, options);
         this.spawned(button);
         return button;
     }
@@ -22,17 +35,24 @@ export class Button extends GameObject {
     hoverColor: string;
     clickColor: string;
     icon?: HTMLImageElement;
-    iconSize: number = 16;
+    iconWidth: number = 16;
+    iconHeight: number = 16;
     iconPadding: number = 8;
+    iconLayout: IconLayout = "above";
     isClicked: boolean = false;
     disabled: boolean = false;
     onClickCallback?: () => void;
 
-    constructor(gameclass: ButtonClass, x: number, y: number, text: string,
-                width: number, height: number, backgroundImage?: string, color: string = "#A0A080",
-                iconFile?: string) {
+    constructor(gameclass: ButtonClass, x: number, y: number, text?: string | null,
+                iconFile?: string | null, options?: ButtonOptions) {
         super(gameclass, x, y);
-        this.text = text;
+        this.text = text ?? "";
+
+        const opts: ButtonOptions = options ?? {};
+        const width = opts.width ?? 100;
+        const height = opts.height ?? 50;
+        const color = opts.color ?? "#A0A080";
+
         this.width = width;
         this.height = height;
         this.color = color;
@@ -48,12 +68,17 @@ export class Button extends GameObject {
         this.hoverColor = `#${Math.min(255, r + 32).toString(16).padStart(2, '0')}${Math.min(255, g + 32).toString(16).padStart(2, '0')}${Math.min(255, b + 32).toString(16).padStart(2, '0')}`;
         this.clickColor = `#${Math.max(0, r - 32).toString(16).padStart(2, '0')}${Math.max(0, g - 32).toString(16).padStart(2, '0')}${Math.max(0, b - 32).toString(16).padStart(2, '0')}`;
 
-        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] created text="${text}" pos=(${x},${y}) size=${width}x${height} color=${color} hover=${this.hoverColor} click=${this.clickColor} bg=${backgroundImage || "none"} icon=${iconFile || "none"}`);
+        if (opts.iconWidth != null) this.iconWidth = opts.iconWidth;
+        if (opts.iconHeight != null) this.iconHeight = opts.iconHeight;
+        if (opts.iconPadding != null) this.iconPadding = opts.iconPadding;
+        if (opts.iconLayout != null) this.iconLayout = opts.iconLayout;
 
-        if (backgroundImage) {
+        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] created text="${this.text}" pos=(${x},${y}) size=${width}x${height} color=${color} hover=${this.hoverColor} click=${this.clickColor} bg=${opts.backgroundImage || "none"} icon=${iconFile || "none"}`);
+
+        if (opts.backgroundImage) {
             this.backgroundImage = new Image();
             this.backgroundImage.onerror = () => { this.backgroundImage = undefined; };
-            this.backgroundImage.src = backgroundImage;
+            this.backgroundImage.src = opts.backgroundImage;
         }
 
         if (iconFile) {
@@ -121,7 +146,21 @@ export class Button extends GameObject {
         this.icon.src = iconFile;
     }
 
+    setIconWidth(w: number): void {
+        this.iconWidth = w;
+    }
 
+    setIconHeight(h: number): void {
+        this.iconHeight = h;
+    }
+
+    setIconPadding(pad: number): void {
+        this.iconPadding = pad;
+    }
+
+    setIconLayout(layout: IconLayout): void {
+        this.iconLayout = layout;
+    }
 
     /**
      * Override draw method to render button with background and text
@@ -157,23 +196,75 @@ export class Button extends GameObject {
             ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
         }
 
-        // Draw icon if present
-        let textOffsetX = 0;
-        if (this.icon && this.icon.complete) {
-            const iconY = -this.iconSize / 2;
-            const iconX = -this.width / 2 + this.iconPadding;
-            ctx.drawImage(this.icon, iconX, iconY, this.iconSize, this.iconSize);
-            textOffsetX = this.iconPadding + this.iconSize;
-        }
+        // Draw icon and text based on layout
+        const iconImage = this.icon;
+        const hasIcon = iconImage && iconImage.complete;
 
-        // Draw text
-        if (this.text) {
+        if (hasIcon) {
+            switch (this.iconLayout) {
+                case "left": {
+                    const iconX = -this.width / 2 + this.iconPadding;
+                    const iconY = -this.iconHeight / 2;
+                    ctx.drawImage(iconImage, iconX, iconY, this.iconWidth, this.iconHeight);
+                    if (this.text) {
+                        ctx.fillStyle = "#000000";
+                        ctx.font = "16px Arial";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        const textX = (this.iconPadding + this.iconWidth) / 2;
+                        ctx.fillText(this.text, textX, 0);
+                    }
+                    break;
+                }
+                case "right": {
+                    const iconX = this.width / 2 - this.iconPadding - this.iconWidth;
+                    const iconY = -this.iconHeight / 2;
+                    ctx.drawImage(iconImage, iconX, iconY, this.iconWidth, this.iconHeight);
+                    if (this.text) {
+                        ctx.fillStyle = "#000000";
+                        ctx.font = "16px Arial";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        const textX = -(this.iconPadding + this.iconWidth) / 2;
+                        ctx.fillText(this.text, textX, 0);
+                    }
+                    break;
+                }
+                case "above": {
+                    const iconX = -this.iconWidth / 2;
+                    const iconY = -this.height / 2 + this.iconPadding;
+                    ctx.drawImage(iconImage, iconX, iconY, this.iconWidth, this.iconHeight);
+                    if (this.text) {
+                        ctx.fillStyle = "#000000";
+                        ctx.font = "16px Arial";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        const textY = (this.iconPadding + this.iconHeight) / 2;
+                        ctx.fillText(this.text, 0, textY);
+                    }
+                    break;
+                }
+                case "below": {
+                    const iconX = -this.iconWidth / 2;
+                    const iconY = this.height / 2 - this.iconPadding - this.iconHeight;
+                    ctx.drawImage(iconImage, iconX, iconY, this.iconWidth, this.iconHeight);
+                    if (this.text) {
+                        ctx.fillStyle = "#000000";
+                        ctx.font = "16px Arial";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        const textY = -(this.iconPadding + this.iconHeight) / 2;
+                        ctx.fillText(this.text, 0, textY);
+                    }
+                    break;
+                }
+            }
+        } else if (this.text) {
             ctx.fillStyle = "#000000";
             ctx.font = "16px Arial";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            const textX = textOffsetX > 0 ? -this.width / 2 + textOffsetX + (this.width - textOffsetX) / 2 : 0;
-            ctx.fillText(this.text, textX, 0);
+            ctx.fillText(this.text, 0, 0);
         }
 
         // Gray overlay when disabled
