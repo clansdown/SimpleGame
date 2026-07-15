@@ -205,6 +205,9 @@ export class GameObject {
     /** The object this is attached to, if any */
     attachedTo : GameObject|null = null;
 
+    /** Whether this object is visible and interactive. Hiding a container hides all attached children via ancestor-chain checks in the engine. */
+    visible: boolean = true;
+
     gameclass : GameObjectClass;
 
     isHovered: boolean = false;

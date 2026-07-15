@@ -170,7 +170,7 @@ This empties every game collection and resets the camera position.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types (defines image, defaults). `defaultSingleCollisionOnly` sets the default for spawned instances. |
-| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `spriteForwardVector`. `singleCollisionOnly` stops collision checks after the first hit per frame. |
+| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `spriteForwardVector`. `singleCollisionOnly` stops collision checks after the first hit per frame. `visible` controls both rendering and interaction (hiding a container hides all attached children). |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
@@ -584,6 +584,32 @@ targets per frame).
 |---|---|---|---|---|
 | `defaultSingleCollisionOnly` | `boolean` | `false` | `GameObjectClass` | Set once on the class to control the default for spawned instances. |
 | `singleCollisionOnly` | `boolean` | inherited from class | `GameObject` | Per-instance override. When `true`, only the first collision per frame fires; remaining checks for that object are skipped. |
+
+---
+
+## Visibility
+
+Set `visible` on any game object to hide it. Invisible objects are not rendered,
+cannot be clicked, and do not register as hovered. Hiding a container hides all
+attached children automatically via the ancestor-chain check.
+
+```typescript
+const panel = new Column(500, 400);
+panel.addChild(btn1);
+panel.addChild(btn2);
+
+// Hide everything — buttons disappear, no interaction
+panel.setVisible(false);
+
+// Show again — everything restored
+panel.setVisible(true);
+```
+
+### API reference
+
+| Member | Type | Default | Description |
+|---|---|---|---|
+| `visible` | `boolean` | `true` | Set directly or via `setVisible()` on containers. |
 
 ---
 

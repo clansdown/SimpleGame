@@ -68,6 +68,10 @@ export class LayoutContainer extends GameObject {
         this.layout();
     }
 
+    setVisible(visible: boolean): void {
+        this.visible = visible;
+    }
+
     // Override to implement specific layout logic
     layout() {
         // To be implemented by subclasses

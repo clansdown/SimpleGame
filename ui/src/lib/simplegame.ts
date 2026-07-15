@@ -114,6 +114,18 @@ function isPointInHitbox(obj: GameObject, x: number, y: number): boolean {
     return x >= left && x <= right && y >= top && y <= bottom;
 }
 
+/**
+ * Checks if an object and all its ancestors in the attachment chain are visible.
+ */
+function isVisible(obj: GameObject): boolean {
+    let current: GameObject | null = obj;
+    while (current) {
+        if (!current.visible) return false;
+        current = current.attachedTo;
+    }
+    return true;
+}
+
 function handleMouseDown(button: number, key: string, event: MouseEvent, boardX: number, boardY: number) {
     let initial = keyMap.has(key) ? !keyMap.get(key) : true;
     keyMap.set(key, true);
@@ -122,6 +134,7 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
         let hitCount = 0;
         const downTargets = [...gameObjects];
         for (const obj of downTargets) {
+            if (!isVisible(obj)) continue;
             const hit = isPointInHitbox(obj, boardX, boardY);
             if (hit) {
                 hitCount++;
@@ -153,6 +166,7 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
         let hitCount = 0;
         const upTargets = [...gameObjects];
         for (const obj of upTargets) {
+            if (!isVisible(obj)) continue;
             if (isPointInHitbox(obj, boardX, boardY)) {
                 hitCount++;
                 const upHandler = obj.onMouseUpMap.get(button);
@@ -308,7 +322,7 @@ function eventHandlerMouseDown(event : MouseEvent) {
 
     if (event.buttons & 1) {
         for (const obj of [...gameObjects]) {
-            if (obj.draggable && obj.canDrag() && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY)) {
+            if (obj.draggable && obj.canDrag() && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY) && isVisible(obj)) {
                 dragCandidate = obj;
                 dragButton = 0;
                 dragCandidateStartX = boardX;
@@ -512,7 +526,9 @@ function draw() {
 
     /* Objects */
     for(const object of gameObjects) {
-        object.draw(ctx, windowX, windowY);
+        if (isVisible(object)) {
+            object.draw(ctx, windowX, windowY);
+        }
     }
 
     /* After-draw hooks (overlays, etc.) */
@@ -642,6 +658,15 @@ function userInput() {
 function detectHover() {
     if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] detectHover: ${gameObjects.size} objects, mouse (${mousePosition.x}, ${mousePosition.y})`);
     for (const obj of [...gameObjects]) {
+        if (!isVisible(obj)) {
+            if (obj.isHovered) {
+                obj.isHovered = false;
+                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] mouseOut: obj=${obj.gameclass.name} (hidden)`);
+                const handler = obj.onMouseOutMap.get(0);
+                if (handler) handler(new MouseEvent('mouseout'));
+            }
+            continue;
+        }
         const wasHovered = obj.isHovered;
         obj.isHovered = isPointInHitbox(obj, mousePosition.x, mousePosition.y);
         if (buttonDebugLevel >= 10) {
