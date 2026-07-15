@@ -17,6 +17,8 @@ export class GameObjectClass {
     defaultHitpoints : number = 1;
     /** The direction the raw sprite image faces. [0, -1] = up, [1, 0] = right, etc. Inherited by all spawned instances. */
     defaultSpriteForwardVector: vec2 = [0, -1];
+    /** Default value for singleCollisionOnly on spawned instances */
+    defaultSingleCollisionOnly: boolean = false;
 
     parent : GameObjectClass|null;
     children : Set<GameObjectClass> = new Set();
@@ -174,6 +176,8 @@ export class GameObject {
     mirrorOnDirection: boolean = false;
     /** The direction the raw sprite image faces. Inherited from class defaultSpriteForwardVector at spawn. [0, -1] = up, [1, 0] = right, etc. */
     spriteForwardVector: vec2 = [0, -1];
+    /** If true, stops collision detection for this object after the first hit per frame. Inherited from class defaultSingleCollisionOnly. */
+    singleCollisionOnly: boolean = false;
 
     /** The current speed in the direction of travel */
     velocity : number = 0;
@@ -253,6 +257,7 @@ export class GameObject {
         this.orientation = 0;
         this.speed = gameclass.defaultSpeed;
         this.spriteForwardVector = [...gameclass.defaultSpriteForwardVector];
+        this.singleCollisionOnly = gameclass.defaultSingleCollisionOnly;
     }
 
     onClick(button: number, handler: (event: MouseEvent) => void) {

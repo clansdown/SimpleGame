@@ -169,8 +169,8 @@ This empties every game collection and resets the camera position.
 
 | Export | Kind | Description |
 |---|---|---|
-| `GameObjectClass` | class | Base class for object types (defines image, defaults). |
-| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `spriteForwardVector`. |
+| `GameObjectClass` | class | Base class for object types (defines image, defaults). `defaultSingleCollisionOnly` sets the default for spawned instances. |
+| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `spriteForwardVector`. `singleCollisionOnly` stops collision checks after the first hit per frame. |
 | `PlayerClass` / `Player` | class | Player-controllable object. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
@@ -556,6 +556,34 @@ before the callback runs.
 | Member | Description |
 |---|---|
 | `onArrival(callback)` | Register a callback that fires when `moveTo` reaches its destination. |
+
+---
+
+## Collision Behaviour
+
+### Single collision per frame
+
+Set `singleCollisionOnly` on a game object to stop collision detection after
+the first hit each frame. Useful for projectiles so one bullet only hits one
+target.
+
+```typescript
+const bullet = bulletClass.spawn(x, y);
+bullet.singleCollisionOnly = true;
+
+// Or set on the class so all instances inherit it:
+bulletClass.defaultSingleCollisionOnly = true;
+```
+
+Default is `false` (existing behaviour — one object can collide with multiple
+targets per frame).
+
+### API reference
+
+| Field | Type | Default | Location | Description |
+|---|---|---|---|---|
+| `defaultSingleCollisionOnly` | `boolean` | `false` | `GameObjectClass` | Set once on the class to control the default for spawned instances. |
+| `singleCollisionOnly` | `boolean` | inherited from class | `GameObject` | Per-instance override. When `true`, only the first collision per frame fires; remaining checks for that object are skipped. |
 
 ---
 

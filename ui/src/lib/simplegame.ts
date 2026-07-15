@@ -120,7 +120,8 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
     if (initial) {
         mouseDownTimes.set(key, Date.now());
         let hitCount = 0;
-        for (const obj of gameObjects) {
+        const downTargets = [...gameObjects];
+        for (const obj of downTargets) {
             const hit = isPointInHitbox(obj, boardX, boardY);
             if (hit) {
                 hitCount++;
@@ -150,7 +151,8 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
     let clickHandled = false;
     if (initial) {
         let hitCount = 0;
-        for (const obj of gameObjects) {
+        const upTargets = [...gameObjects];
+        for (const obj of upTargets) {
             if (isPointInHitbox(obj, boardX, boardY)) {
                 hitCount++;
                 const upHandler = obj.onMouseUpMap.get(button);
@@ -305,7 +307,7 @@ function eventHandlerMouseDown(event : MouseEvent) {
     const boardY = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
 
     if (event.buttons & 1) {
-        for (const obj of gameObjects) {
+        for (const obj of [...gameObjects]) {
             if (obj.draggable && obj.canDrag() && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY)) {
                 dragCandidate = obj;
                 dragButton = 0;
@@ -639,7 +641,7 @@ function userInput() {
 
 function detectHover() {
     if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] detectHover: ${gameObjects.size} objects, mouse (${mousePosition.x}, ${mousePosition.y})`);
-    for (const obj of gameObjects) {
+    for (const obj of [...gameObjects]) {
         const wasHovered = obj.isHovered;
         obj.isHovered = isPointInHitbox(obj, mousePosition.x, mousePosition.y);
         if (buttonDebugLevel >= 10) {
@@ -709,32 +711,37 @@ export function afterDraw(callback: (ctx: CanvasRenderingContext2D, offsetX: num
 }
 
 function doCollisionDetection() : CollisionDetector{
-    // console.log("Doing collision detection");
     const detector = new CollisionDetector(boardWidth, boardHeight);
+    const alreadyCollided = new Set<GameObject>();
+
     for(const action of collisionActions) {
-        if(action.sourceGameClass) {
-            
+        const source = action.sourceGameObject;
+        if (!source) continue;
 
-        }
-        if(action.sourceGameObject) {
-            if(action.targetGameClass) {
-                const tag = action.targetGameClass.name;
-                // console.log("Building tree for ", tag);
-                detector.buildTree(tag, action.targetGameClass.getAllGameObjects(new Set<GameObject>()));
-                const collisions = detector.detectCollisions([action.sourceGameObject], [tag]);
-                for(const collision of collisions) {
-                    action.work(action.sourceGameObject, collision);
-                }
-            }
-            if(action.targetGameObject) {
-                // Check if the specific objects collide using the detector
-                const detector = new CollisionDetector(boardWidth, boardHeight);
-                if(detector.collides(action.sourceGameObject, action.targetGameObject)) {
-                    action.work(action.sourceGameObject, action.targetGameObject);
+        if (source.singleCollisionOnly && alreadyCollided.has(source)) continue;
+
+        if(action.targetGameClass) {
+            const tag = action.targetGameClass.name;
+            detector.buildTree(tag, action.targetGameClass.getAllGameObjects(new Set<GameObject>()));
+            const collisions = detector.detectCollisions([source], [tag]);
+            for(const collision of collisions) {
+                action.work(source, collision);
+                if (source.singleCollisionOnly) {
+                    alreadyCollided.add(source);
+                    break;
                 }
             }
         }
 
+        if(action.targetGameObject) {
+            const objDetector = new CollisionDetector(boardWidth, boardHeight);
+            if(objDetector.collides(source, action.targetGameObject)) {
+                action.work(source, action.targetGameObject);
+                if (source.singleCollisionOnly) {
+                    alreadyCollided.add(source);
+                }
+            }
+        }
     }
     return detector;
 }
@@ -858,7 +865,7 @@ export function setSize(width: number, height: number) {
  *   clear(); // Use this when resetting or restarting a game
  */
 export function clear() {
-    for (const obj of gameObjects) {
+    for (const obj of [...gameObjects]) {
         obj.gameclass.destroy(obj);
     }
     gameObjects.clear();
