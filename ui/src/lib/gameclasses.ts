@@ -929,8 +929,8 @@ export class TextClass extends GameObjectClass {
         super(name, image_file, TextClass.rootTextClass);
     }
 
-    spawnAt(text : string, pos : Position2D) : Text {
-        const t = new Text(this, text, pos.x, pos.y);
+    spawnAt(text : string, pos : Position2D, inlineImages?: InlineImageMap) : Text {
+        const t = new Text(this, text, pos.x, pos.y, inlineImages);
         t.text = text;
         this.spawned(t);
         return t;
@@ -939,31 +939,167 @@ export class TextClass extends GameObjectClass {
 
 }
 const textClass = new TextClass("root", null);
-export function createText(text : string, pos : Position2D) : Text {
-    return textClass.spawnAt(text, pos);
+export function createText(text : string, pos : Position2D, inlineImages?: InlineImageMap) : Text {
+    return textClass.spawnAt(text, pos, inlineImages);
 }
+
+interface ParsedSegment {
+    type: "text" | "image";
+    value: string;
+}
+
+function parseInlineText(text: string): ParsedSegment[] {
+    const segments: ParsedSegment[] = [];
+    const regex = /\{img:([a-zA-Z0-9_-]+)\}/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            segments.push({ type: "text", value: text.slice(lastIndex, match.index) });
+        }
+        segments.push({ type: "image", value: match[1] });
+        lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+        segments.push({ type: "text", value: text.slice(lastIndex) });
+    }
+    return segments;
+}
+
+export interface InlineImageDef {
+    image: HTMLImageElement | string;
+    width: number;
+    height: number;
+}
+
+export type InlineImageMap = Record<string, InlineImageDef>;
+
+const TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 export class Text extends GameObject {
     text : string;
     size : number = 32;
     foreground : string = "white";
-    background : string = "black";
-    
+    highlightColor?: string;
+    highlightPadding: number = 4;
+    shadowColor?: string;
+    shadowBlur: number = 4;
+    shadowOffsetX: number = 2;
+    shadowOffsetY: number = 2;
+    textAlign: CanvasTextAlign = "left";
+    inlineImages?: InlineImageMap;
 
-    constructor(gameclass : TextClass, text:string, x : number, y : number) {
+
+    constructor(gameclass : TextClass, text:string, x : number, y : number, inlineImages?: InlineImageMap) {
         super(gameclass, x, y);
         this.text = text;
+        if (inlineImages) {
+            this.setInlineImages(inlineImages);
+        }
+    }
+
+    setHighlight(color: string, padding?: number): void {
+        this.highlightColor = color;
+        if (padding != null) this.highlightPadding = padding;
+    }
+
+    setShadow(color: string, blur?: number, offsetX?: number, offsetY?: number): void {
+        this.shadowColor = color;
+        if (blur != null) this.shadowBlur = blur;
+        if (offsetX != null) this.shadowOffsetX = offsetX;
+        if (offsetY != null) this.shadowOffsetY = offsetY;
+    }
+
+    setTextAlign(align: CanvasTextAlign): void {
+        this.textAlign = align;
+    }
+
+    setInlineImages(images: InlineImageMap): void {
+        for (const name in images) {
+            const def = images[name];
+            if (typeof def.image === "string") {
+                const img = new Image();
+                const url = def.image;
+                img.onload = () => { def.image = img; };
+                img.onerror = () => {
+                    console.error(`[Text] Failed to load inline image "${url}"`);
+                    img.src = TRANSPARENT_GIF;
+                    def.image = img;
+                };
+                img.src = url;
+            }
+        }
+        this.inlineImages = images;
     }
 
     draw(ctx : CanvasRenderingContext2D, offsetX : number, offsetY : number) {
-        // console.log("Drawing text", this.text);
         ctx.save();
         ctx.font = this.size + "px Arial, Helvetica, sans-serif";
         ctx.translate(this.x - offsetX, this.y - offsetY);
-        ctx.fillStyle = this.background;
-        ctx.fillText(this.text, 0, 0);
-        ctx.fillStyle = this.foreground;
-        ctx.fillText(this.text, -1, -1);
+        ctx.textBaseline = "middle";
+        ctx.textAlign = "left";
+
+        const segments = parseInlineText(this.text);
+
+        // Compute total width for alignment
+        let totalWidth = 0;
+        for (const seg of segments) {
+            if (seg.type === "text") {
+                totalWidth += ctx.measureText(seg.value).width;
+            } else if (seg.type === "image") {
+                const def = this.inlineImages?.[seg.value];
+                if (def) totalWidth += def.width;
+            }
+        }
+
+        let xCursor = 0;
+        if (this.textAlign === "center") xCursor = -totalWidth / 2;
+        else if (this.textAlign === "right") xCursor = -totalWidth;
+
+        for (const seg of segments) {
+            if (seg.type === "text") {
+                const metrics = ctx.measureText(seg.value);
+                const textWidth = metrics.width;
+                const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+
+                if (this.highlightColor) {
+                    ctx.fillStyle = this.highlightColor;
+                    const hx = xCursor - metrics.actualBoundingBoxLeft - this.highlightPadding;
+                    const hy = -metrics.actualBoundingBoxAscent - this.highlightPadding;
+                    ctx.fillRect(hx, hy, textWidth + this.highlightPadding * 2, textHeight + this.highlightPadding * 2);
+                }
+
+                if (this.shadowColor) {
+                    ctx.shadowColor = this.shadowColor;
+                    ctx.shadowBlur = this.shadowBlur;
+                    ctx.shadowOffsetX = this.shadowOffsetX;
+                    ctx.shadowOffsetY = this.shadowOffsetY;
+                }
+
+                ctx.fillStyle = this.foreground;
+                ctx.fillText(seg.value, xCursor, 0);
+
+                if (this.shadowColor) {
+                    ctx.shadowColor = "transparent";
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                }
+
+                xCursor += textWidth;
+
+            } else if (seg.type === "image") {
+                const def = this.inlineImages?.[seg.value];
+                if (def) {
+                    const img = def.image instanceof HTMLImageElement ? def.image : null;
+                    if (img && img.complete && img.naturalWidth > 0) {
+                        ctx.drawImage(img, xCursor, -def.height / 2, def.width, def.height);
+                    }
+                    xCursor += def.width;
+                }
+            }
+        }
+
         ctx.restore();
     }
 }

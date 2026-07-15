@@ -176,8 +176,10 @@ This empties every game collection and resets the camera position.
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
 | `ItemClass` / `Item` | class | Collectible / neutral object. |
 | `EffectClass` / `Effect` | class | Visual effect (animated, auto-destroy). |
-| `TextClass` / `Text` | class | Text overlay. |
-| `createText(text, pos)` | function | Convenience factory for `Text`. |
+| `TextClass` / `Text` | class | Text overlay with highlight, drop shadow, alignment, and inline image support (`{img:name}` syntax). |
+| `createText(text, pos, inlineImages?)` | function | Convenience factory for `Text`. |
+| `InlineImageDef` | interface | `{ image: HTMLImageElement \| string, width: number, height: number }` — inline image definition. |
+| `InlineImageMap` | type | `Record<string, InlineImageDef>` — map of identifiers to inline image definitions. |
 
 ### Utilities (`util.ts`)
 
@@ -643,6 +645,73 @@ All logs are prefixed with `[ButtonDebug]` and cover:
 | Per-object geometry | 10 | `[ButtonDebug]   obj="btn" pos=(500,500) hitbox=120x50 bounds=[440-560, 475-525] hit=true` |
 
 Set level to `10` to see the full per-object enumeration in `detectHover` and `handleMouseDown`.
+
+---
+
+## Text
+
+The `Text` class renders text with optional highlight, drop shadow, alignment,
+and inline images.
+
+### Creating text
+
+```typescript
+import { createText, InlineImageDef } from "./lib/gameclasses";
+
+// Simple text
+const label = createText("Hello World", { x: 100, y: 200 });
+label.size = 48;
+label.foreground = "#FF0000";
+```
+
+### Highlight & shadow
+
+```typescript
+label.setHighlight("#FFFF00", 6);             // yellow highlight, 6px padding
+label.setShadow("#000000", 4, 2, 2);           // black drop shadow, 4px blur, 2px offset
+```
+
+### Alignment
+
+```typescript
+label.setTextAlign("center");  // "left" (default), "center", "right"
+```
+
+### Inline images
+
+Insert images into text using `{img:name}` syntax. Define the images with
+`InlineImageDef` objects specifying the image source and display dimensions:
+
+```typescript
+const score = createText(
+    "Score: {img:star} 5 / 10",
+    { x: 100, y: 300 },
+    {
+        star: { image: "star.png", width: 24, height: 24 },
+    },
+);
+
+// Or set at runtime:
+score.setInlineImages({
+    heart: { image: heartImageElement, width: 20, height: 20 },
+    coin:  { image: "coin.png", width: 18, height: 18 },
+});
+```
+
+When an image source is a string URL, the engine loads it automatically and
+falls back to a transparent GIF on error. Layout space is always reserved for
+the defined width — no visual jump when the image loads.
+
+### Text API reference
+
+| Member | Description |
+|---|---|
+| `size` | Font size in px (default 32). |
+| `foreground` | Text fill colour (default `"white"`). |
+| `setHighlight(color, padding?)` | Enable highlight with given colour and optional padding around text (default 4). |
+| `setShadow(color, blur?, offsetX?, offsetY?)` | Enable drop shadow with given colour, blur radius (default 4), and offsets (default 2). |
+| `setTextAlign(align)` | `"left"` (default), `"center"`, or `"right"`. |
+| `setInlineImages(images)` | Provide `InlineImageMap` for `{img:name}` syntax. |
 
 ### Engine API
 
