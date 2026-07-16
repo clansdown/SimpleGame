@@ -1,6 +1,63 @@
 import { gameObjects, enemies, collisionActions, CollisionAction, boardWidth, boardHeight, players, projectiles, items } from "./simplegame";
 import type { Position2D, vec2 } from "./util";
 
+/**
+ * Options for circular/orbital movement via GameObject.circleAround().
+ *
+ * The object sweeps an arc around a center point at a fixed radius,
+ * with configurable facing direction, optional fade-in/out velocity
+ * ramps, and an optional arc limit with completion callback.
+ *
+ * All angle parameters use polar coordinates (0 = right, π/2 = down
+ * in screen coordinates, π = left, 3π/2 = up) and are relative to
+ * the center's local coordinate system when center is a GameObject.
+ *
+ * @param center - The point or GameObject to orbit. When a GameObject,
+ *   the orbit position and facing are recomputed every frame relative
+ *   to the center's current location and orientation.
+ * @param radius - Orbit radius in board units.
+ * @param velocity - Linear speed along the circular path (board units/sec).
+ * @param startAngleRad - Starting position on the circle in radians.
+ *   Ignored if startAngleDeg is also provided.
+ * @param startAngleDeg - Starting position on the circle in degrees.
+ *   Takes precedence over startAngleRad.
+ * @param facing - Direction vector {x, y} specifying the object's
+ *   facing direction in a local frame where:
+ *   - x-axis = clockwise tangent of the circle
+ *   - y-axis = radially outward from centre
+ *   Default: {x: 1, y: 0} (clockwise tangent — race-car style).
+ *   Common values:
+ *     {1, 0}  → clockwise tangent
+ *     {0, 1}  → directly away from centre
+ *     {0, -1} → directly toward centre
+ *     {-1, 0} → counter-clockwise tangent
+ * @param fadeInTime - Seconds over which velocity ramps from 0 to
+ *   full at the start of the orbit. Default 0.
+ * @param fadeOutTime - Seconds over which velocity ramps to 0 near
+ *   the end of the arc. Only meaningful when arcDeg/arcRad is set.
+ *   Default 0.
+ * @param arcRad - Total arc to sweep in radians. Omit to orbit
+ *   indefinitely (or until cancelCircleAround() is called).
+ * @param arcDeg - Total arc to sweep in degrees. Takes precedence
+ *   over arcRad. Omit for indefinite orbit.
+ * @param onComplete - Called once after the arc is fully traversed.
+ *   The object is snapped to the exact final position before the
+ *   callback fires.
+ */
+export interface CircleAroundOptions {
+    center: Position2D | GameObject;
+    radius: number;
+    velocity: number;
+    startAngleRad?: number;
+    startAngleDeg?: number;
+    facing?: { x: number; y: number };
+    fadeInTime?: number;
+    fadeOutTime?: number;
+    arcRad?: number;
+    arcDeg?: number;
+    onComplete?: () => void;
+}
+
 export const gameClasses : GameObjectClass[] = [];
 
 export class GameObjectClass {
@@ -186,8 +243,24 @@ export class GameObject {
     destination : Position2D | null = null;
     /** The distance from the destination at which deceleration begins. */
     decelerationDistance : number = 4;
-    /** A number of seconds for the minimum deceleration velocity. Higher values allow slower final approach. */
+    /** The number of seconds for the minimum deceleration velocity. Higher values allow slower final approach. */
     decelerationTime : number = 1.0;
+
+    /** Non-null when this object is in circular orbit. Managed by circleAround() / cancelCircleAround(). */
+    protected circleState: {
+        center: Position2D | GameObject;
+        radius: number;
+        currentAngle: number;
+        angularVelocity: number;
+        elapsed: number;
+        facingX: number;
+        facingY: number;
+        fadeInTime: number;
+        fadeOutTime: number;
+        arcRad: number | null;
+        completedArcRad: number;
+        onComplete: (() => void) | null;
+    } | null = null;
 
     boundToBoard : boolean = false;
 
@@ -394,6 +467,7 @@ export class GameObject {
      *   enemy.moveTo({x: 1000, y: 500}, 3.0); // Moves to position over 3 seconds
      */
     moveTo(position: Position2D, time: number) {
+        this.circleState = null;
         const dx = position.x - this.x;
         const dy = position.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -437,6 +511,13 @@ export class GameObject {
     doMovement(delta_t : number) {
         // Attached objects don't move independently
         if (this.attachedTo) {
+            return;
+        }
+
+        // Circular orbit takes precedence over all other movement
+        if (this.circleState) {
+            this.updateCircleMovement(delta_t);
+            this.updateAttached();
             return;
         }
 
@@ -504,6 +585,131 @@ export class GameObject {
             }
         }
         this.updateAttached();
+    }
+
+    /**
+     * Updates position and facing for a circular orbit every frame.
+     * Called from doMovement() when circleState is set.
+     *
+     * Handles:
+     *   - Angular position computation from velocity and elapsed time
+     *   - Fade-in: velocity ramp from 0 over fadeInTime seconds
+     *   - Fade-out: velocity ramp to 0 as remaining arc shrinks
+     *   - Position relative to center (with rotation if center is GameObject)
+     *   - Facing direction from the facing vector, optionally rotated by center
+     *   - Arc completion detection, snap, callback firing, state cleanup
+     */
+    protected updateCircleMovement(dt: number): void {
+        const state = this.circleState;
+        if (!state) return;
+
+        if (state.angularVelocity <= 0) return;
+
+        // --- Fade-in multiplier ---
+        let fadeMul = 1;
+        if (state.fadeInTime > 0 && state.elapsed < state.fadeInTime) {
+            fadeMul = state.elapsed / state.fadeInTime;
+        }
+
+        // --- Angular step ---
+        let angleStep = state.angularVelocity * dt * fadeMul;
+
+        // --- Fade-out: ramp to 0 as remaining arc shrinks ---
+        let completed = false;
+        if (state.arcRad != null) {
+            const remaining = state.arcRad - state.completedArcRad;
+            if (remaining <= 0.0001) {
+                completed = true;
+                angleStep = 0;
+            } else if (state.fadeOutTime > 0) {
+                const fadeOutWindow = state.angularVelocity * state.fadeOutTime;
+                if (remaining < fadeOutWindow) {
+                    angleStep *= remaining / fadeOutWindow;
+                }
+            }
+        }
+
+        // --- Clamp to remaining arc ---
+        if (state.arcRad != null && !completed) {
+            const remaining = state.arcRad - state.completedArcRad;
+            if (angleStep >= remaining) {
+                angleStep = remaining;
+                completed = true;
+            }
+        }
+
+        // --- Apply step ---
+        state.currentAngle += angleStep;
+        state.completedArcRad += angleStep;
+        state.elapsed += dt;
+
+        // --- Get center position and orientation ---
+        let centerX: number;
+        let centerY: number;
+        let centerOrientation = 0;
+        if (state.center instanceof GameObject) {
+            centerX = state.center.x;
+            centerY = state.center.y;
+            centerOrientation = state.center.orientation;
+        } else {
+            centerX = state.center.x;
+            centerY = state.center.y;
+        }
+
+        // --- Compute offset from center ---
+        const cosA = Math.cos(state.currentAngle);
+        const sinA = Math.sin(state.currentAngle);
+
+        let offsetX = state.radius * cosA;
+        let offsetY = state.radius * sinA;
+
+        // Rotate offset by centre's orientation so the orbit follows
+        // the centre's local coordinate system
+        if (centerOrientation !== 0) {
+            const cosR = Math.cos(centerOrientation);
+            const sinR = Math.sin(centerOrientation);
+            const rx = offsetX * cosR - offsetY * sinR;
+            const ry = offsetX * sinR + offsetY * cosR;
+            offsetX = rx;
+            offsetY = ry;
+        }
+
+        this.setLocation(centerX + offsetX, centerY + offsetY);
+
+        // --- Compute facing direction ---
+        // In the centre's local frame at angle θ:
+        //   radial outward = (cosθ, sinθ)
+        //   clockwise tangent = (sinθ, -cosθ)
+        // The facing vector is interpreted as:
+        //   facingX × tangent + facingY × radial
+        const worldDirX = state.facingX * sinA + state.facingY * cosA;
+        const worldDirY = state.facingX * (-cosA) + state.facingY * sinA;
+
+        // Rotate facing by centre's orientation
+        let dirX: number;
+        let dirY: number;
+        if (centerOrientation !== 0) {
+            const cosR = Math.cos(centerOrientation);
+            const sinR = Math.sin(centerOrientation);
+            dirX = worldDirX * cosR - worldDirY * sinR;
+            dirY = worldDirX * sinR + worldDirY * cosR;
+        } else {
+            dirX = worldDirX;
+            dirY = worldDirY;
+        }
+
+        const norm = Math.sqrt(dirX * dirX + dirY * dirY);
+        if (norm > 0.0001) {
+            // setOrientationRadians expects 0 = up; atan2 gives 0 = right
+            this.setOrientationRadians(Math.atan2(dirY, dirX) + Math.PI / 2);
+        }
+
+        // --- Arc completion ---
+        if (completed) {
+            const cb = state.onComplete;
+            this.circleState = null;
+            cb?.();
+        }
     }
 
     takeDamage(amount : number) {
@@ -646,6 +852,13 @@ export class Player extends GameObject {
     }
 
     doMovement(delta_t: number): void {
+        // Circular orbit takes precedence over all other movement
+        if (this.circleState) {
+            this.updateCircleMovement(delta_t);
+            this.updateAttached();
+            return;
+        }
+
         // Handle destination-based movement with deceleration (takes precedence over keyboard)
         if (this.destination) {
             const dx = this.destination.x - this.x;
@@ -746,6 +959,7 @@ export class Player extends GameObject {
      *   player.moveTo({x: 500, y: 300}, 2.0); // Moves to position over 2 seconds
      */
     moveTo(position: Position2D, time: number) {
+        this.circleState = null;
         const dx = position.x - this.x;
         const dy = position.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);

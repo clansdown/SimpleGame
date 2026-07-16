@@ -648,6 +648,89 @@ Set level to `10` to see the full per-object enumeration in `detectHover` and `h
 
 ---
 
+## Orbital (Circular) Movement
+
+Move a game object in a circular orbit around a fixed point or another
+game object. The object's position and facing are updated every frame.
+
+```typescript
+// Orbit a fixed point — one revolution at race-car tangent facing
+const sentry = guardClass.spawn(100, 100);
+sentry.circleAround({
+    center: { x: 500, y: 300 },
+    radius: 150,
+    velocity: 100,
+    startAngleDeg: 0,
+    facing: { x: 1, y: 0 },
+    arcDeg: 360,
+    onComplete: () => sentry.destroy(),
+});
+```
+
+```typescript
+// Orbit a player — face outward, smooth start, indefinite
+drone.circleAround({
+    center: player,
+    radius: 80,
+    velocity: 40,
+    startAngleRad: 0,
+    facing: { x: 0, y: 1 },
+    fadeInTime: 0.5,
+});
+```
+
+### Arc limits
+
+When `arcDeg` or `arcRad` is set, the object sweeps exactly that angle
+and stops (firing `onComplete`). Omit both for indefinite orbiting.
+
+### Fade-in / fade-out
+
+- **fadeInTime**: velocity ramps linearly from 0 to full over the given
+  seconds at the start of the orbit.
+- **fadeOutTime**: velocity ramps linearly to 0 over the given seconds
+  as the object approaches the end of its arc (`arcDeg`/`arcRad` must
+  be set). This provides a smooth deceleration into the final position.
+
+### Centre following
+
+When `center` is a `GameObject`, the orbit tracks the centre's position
+and rotation every frame. All angles are relative to the centre's local
+coordinate system — if the centre rotates, the entire orbit rotates with
+it. If the centre is destroyed, the orbit continues around the centre's
+last known position.
+
+### Cancellation
+
+Call `cancelCircleAround()` to end the orbit early. The object stays
+at its current position. Calling `moveTo()` also cancels the orbit
+(and vice versa).
+
+### CircleAroundOptions reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `center` | `Position2D \| GameObject` | (required) | Point or object to orbit. GameObjects are tracked every frame including rotation. |
+| `radius` | `number` | (required) | Orbit radius in board units. |
+| `velocity` | `number` | (required) | Linear speed along the circular path (board units/sec). |
+| `startAngleRad` | `number` | — | Starting angle in radians. 0=right, π/2=down (screen). Ignored if `startAngleDeg` is also set. |
+| `startAngleDeg` | `number` | — | Starting angle in degrees. Takes precedence over `startAngleRad`. 0=right. |
+| `facing` | `{x: number, y: number}` | `{x: 1, y: 0}` | Direction the object faces in a local frame where x=clockwise tangent, y=radially outward from centre. |
+| `fadeInTime` | `number` | `0` | Seconds to ramp velocity from 0 to full at the start. |
+| `fadeOutTime` | `number` | `0` | Seconds to ramp velocity to 0 near the end of the arc. Only used when `arcDeg`/`arcRad` is set. |
+| `arcRad` | `number` | — | Total arc to sweep in radians. Omit for indefinite orbit. |
+| `arcDeg` | `number` | — | Total arc to sweep in degrees. Takes precedence over `arcRad`. Omit for indefinite orbit. |
+| `onComplete` | `() => void` | — | Called once after the arc is fully traversed. The object is snapped to the exact final position before the callback fires. |
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `circleAround(options)` | Start circular orbit. Cancels any active `moveTo`. |
+| `cancelCircleAround()` | End orbit immediately. Object stays at current position. |
+
+---
+
 ## Text
 
 The `Text` class renders text with optional highlight, drop shadow, alignment,
