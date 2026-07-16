@@ -477,6 +477,87 @@ export class GameObject {
     }
 
     /**
+     * Moves the object in a circular orbit around a center point.
+     * Position and facing are updated every frame until the optional
+     * arc is completed or cancelCircleAround() is called.
+     *
+     * The center can be a fixed point ({x, y}) or a GameObject. When
+     * orbiting a GameObject, the orbit follows the centre's movement
+     * and rotation automatically — all positions and facing directions
+     * are computed relative to the centre's current location and
+     * orientation every frame.
+     *
+     * Calling circleAround() cancels any active moveTo. Calling
+     * moveTo() cancels any active circleAround.
+     *
+     * @param options - Orbit configuration (see CircleAroundOptions).
+     *
+     * @example
+     *   // Orbit a fixed point, face tangent, one full loop
+     *   enemy.circleAround({
+     *       center: { x: 500, y: 300 },
+     *       radius: 150,
+     *       velocity: 100,
+     *       startAngleDeg: 0,
+     *       facing: { x: 1, y: 0 },
+     *       arcDeg: 360,
+     *       onComplete: () => enemy.destroy(),
+     *   });
+     *
+     * @example
+     *   // Hover around player, face outward, smooth start
+     *   drone.circleAround({
+     *       center: player,
+     *       radius: 80,
+     *       velocity: 40,
+     *       startAngleRad: 0,
+     *       facing: { x: 0, y: 1 },
+     *       fadeInTime: 0.5,
+     *   });
+     */
+    circleAround(options: CircleAroundOptions): void {
+        const startAngleRad = options.startAngleDeg != null
+            ? options.startAngleDeg * Math.PI / 180
+            : options.startAngleRad ?? 0;
+
+        const arcRad = options.arcDeg != null
+            ? options.arcDeg * Math.PI / 180
+            : options.arcRad ?? null;
+
+        const facingX = options.facing?.x ?? 1;
+        const facingY = options.facing?.y ?? 0;
+        const facingLen = Math.sqrt(facingX * facingX + facingY * facingY);
+        const normFacingX = facingLen > 0 ? facingX / facingLen : 1;
+        const normFacingY = facingLen > 0 ? facingY / facingLen : 0;
+
+        this.destination = null;
+
+        this.circleState = {
+            center: options.center,
+            radius: options.radius,
+            currentAngle: startAngleRad,
+            angularVelocity: options.velocity / options.radius,
+            elapsed: 0,
+            facingX: normFacingX,
+            facingY: normFacingY,
+            fadeInTime: options.fadeInTime ?? 0,
+            fadeOutTime: options.fadeOutTime ?? 0,
+            arcRad: arcRad,
+            completedArcRad: 0,
+            onComplete: options.onComplete ?? null,
+        };
+    }
+
+    /**
+     * Cancels an active circular orbit. The object stops at its current
+     * position and resumes normal behaviour (stationary, moveTo, etc.)
+     * on the next frame.
+     */
+    cancelCircleAround(): void {
+        this.circleState = null;
+    }
+
+    /**
      * Registers a callback that fires when the object reaches its moveTo destination.
      *
      * @param callback - The function to call on arrival
