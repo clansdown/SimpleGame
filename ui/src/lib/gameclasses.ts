@@ -281,6 +281,9 @@ export class GameObject {
     /** Whether this object is visible and interactive. Hiding a container hides all attached children via ancestor-chain checks in the engine. */
     visible: boolean = true;
 
+    /** Opacity multiplier (0–1) for rendering. 1 = fully opaque (default — skipped for performance). */
+    opacity: number = 1;
+
     gameclass : GameObjectClass;
 
     isHovered: boolean = false;
@@ -860,6 +863,10 @@ export class GameObject {
         if(this.fateOutMillis > 0 && this.timeExistedMillis >= (this.maxDurationMillis - this.fateOutMillis)) {
             ctx.globalAlpha = Math.max(0, Math.min(1, (this.maxDurationMillis - this.timeExistedMillis)/this.fateOutMillis));
         }
+        /* Opacity */
+        if (this.opacity < 1) {
+            ctx.globalAlpha *= this.opacity;
+        }
         /* Scale */
         if(this.width > 0 && this.height > 0)
             ctx.scale(this.width/this.gameclass.image.width, this.height/this.gameclass.image.height);
@@ -1333,6 +1340,11 @@ export class Text extends GameObject {
         ctx.translate(this.x - offsetX, this.y - offsetY);
         ctx.textBaseline = "middle";
         ctx.textAlign = "left";
+
+        /* Opacity */
+        if (this.opacity < 1) {
+            ctx.globalAlpha = this.opacity;
+        }
 
         const segments = parseInlineText(this.text);
 

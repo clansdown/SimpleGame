@@ -612,6 +612,7 @@ panel.setVisible(true);
 | Member | Type | Default | Description |
 |---|---|---|---|
 | `visible` | `boolean` | `true` | Set directly or via `setVisible()` on containers. |
+| `opacity` | `number` | `1` | Opacity multiplier (0–1) for rendering. `1` = fully opaque (default — no performance cost; `globalAlpha` is not touched). `0` = fully invisible. Compounds with fade-in/out effects. |
 
 ---
 

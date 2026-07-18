@@ -238,8 +238,10 @@ export class Button extends GameObject {
         }
 
         // --- Background layer ---
-        if (this.backgroundOpacity < 1) {
-            ctx.globalAlpha = this.backgroundOpacity;
+        const bgAlpha = this.backgroundOpacity * this.opacity;
+        const needAlpha = bgAlpha < 1 || this.opacity < 1;
+        if (needAlpha) {
+            ctx.globalAlpha = bgAlpha;
         }
 
         const bgReady = this.backgroundImage?.complete === true;
@@ -258,8 +260,8 @@ export class Button extends GameObject {
             ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
         }
 
-        if (this.backgroundOpacity < 1) {
-            ctx.globalAlpha = 1;
+        if (needAlpha) {
+            ctx.globalAlpha = this.opacity;
         }
 
         // --- Icon + text layer ---
