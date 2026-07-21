@@ -1,5 +1,5 @@
 import { GameObject, GameObjectClass } from "./gameclasses";
-import { boardWidth, boardHeight } from "./simplegame";
+import { gameObjects, boardWidth, boardHeight } from "./simplegame";
 
 export enum LayoutJustify {
     START = "start",
@@ -19,21 +19,23 @@ export enum LayoutAlign {
 export class LayoutContainer extends GameObject {
     children: GameObject[] = [];
     padding: number = 0;
+    gutter: number = 0;
+    borderWidth: number = 0;
+    borderColor: string = "#000000";
     justify: LayoutJustify = LayoutJustify.START;
     align: LayoutAlign = LayoutAlign.START;
     explicitWidth?: number;
     explicitHeight?: number;
 
     constructor(x: number, y: number) {
-        // Create a temporary game class for layout containers
         const layoutClass = new GameObjectClass("layout-container", null, null);
         super(layoutClass, x, y);
-        this.layoutCanResizeMe = false; // Containers manage their own sizing
+        this.layoutCanResizeMe = false;
+        gameObjects.add(this);
     }
 
     addChild(child: GameObject) {
         this.children.push(child);
-        // Attach child to this container
         this.attach(child, 0, 0, 0);
     }
 
@@ -48,6 +50,16 @@ export class LayoutContainer extends GameObject {
     setPadding(padding: number) {
         this.padding = padding;
         this.layout();
+    }
+
+    setGutter(gutter: number) {
+        this.gutter = gutter;
+        this.layout();
+    }
+
+    setBorder(width: number, color?: string) {
+        this.borderWidth = width;
+        if (color) this.borderColor = color;
     }
 
     setJustify(justify: LayoutJustify) {
@@ -72,9 +84,39 @@ export class LayoutContainer extends GameObject {
         this.visible = visible;
     }
 
-    // Override to implement specific layout logic
     layout() {
         // To be implemented by subclasses
+    }
+
+    doMovement(delta_t: number): void {
+        // Layout containers don't move independently
+    }
+
+    draw(ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number): void {
+        if (this.width <= 0 || this.height <= 0) return;
+        ctx.save();
+        ctx.translate(this.x - offsetX, this.y - offsetY);
+        if (this.opacity < 1) {
+            ctx.globalAlpha = this.opacity;
+        }
+        if (this.borderWidth > 0) {
+            ctx.strokeStyle = this.borderColor;
+            ctx.lineWidth = this.borderWidth;
+            ctx.strokeRect(
+                -this.width / 2, -this.height / 2,
+                this.width, this.height,
+            );
+        }
+        ctx.restore();
+    }
+
+    syncAttachOffset(child: GameObject): void {
+        for (const attached of this.attachedObjects) {
+            if (attached.gameObject === child) {
+                attached.offsetX = child.x - this.x;
+                attached.offsetY = child.y - this.y;
+            }
+        }
     }
 
     getContentWidth(): number {
@@ -90,61 +132,69 @@ export class LayoutContainer extends GameObject {
 
 export class Row extends LayoutContainer {
     layout() {
-        if (this.children.length === 0) return;
+        if (this.children.length === 0) {
+            this.width = this.explicitWidth ?? 0;
+            this.height = this.explicitHeight ?? 0;
+            return;
+        }
 
-        const totalWidth = this.explicitWidth || this.getContentWidth();
-        const totalHeight = this.explicitHeight || Math.max(...this.children.map(c => c.height));
+        const totalChildrenWidth = this.children.reduce((sum, c) => sum + c.width, 0);
+        const totalGutters = Math.max(0, this.children.length - 1) * this.gutter;
+        const contentWidth = totalChildrenWidth + totalGutters;
+        const totalWidth = this.explicitWidth ?? (this.padding * 2 + contentWidth);
+
+        const contentHeight = Math.max(...this.children.map(c => c.height));
+        const totalHeight = this.explicitHeight ?? (this.padding * 2 + contentHeight);
 
         this.width = totalWidth;
         this.height = totalHeight;
 
-        let currentX = this.x - totalWidth / 2 + this.padding;
-        const startY = this.y;
+        const startX = this.x - totalWidth / 2 + this.padding;
+        let currentX = startX;
 
-        // Calculate spacing based on justify
-        let spacing = 0;
+        let extraSpacing = 0;
         if (this.justify === LayoutJustify.SPACE_BETWEEN && this.children.length > 1) {
-            const availableSpace = totalWidth - this.padding * 2 - this.children.reduce((sum, c) => sum + c.width, 0);
-            spacing = availableSpace / (this.children.length - 1);
+            const avail = totalWidth - this.padding * 2 - contentWidth;
+            extraSpacing = avail / (this.children.length - 1);
         } else if (this.justify === LayoutJustify.SPACE_AROUND && this.children.length > 1) {
-            const availableSpace = totalWidth - this.padding * 2 - this.children.reduce((sum, c) => sum + c.width, 0);
-            spacing = availableSpace / this.children.length;
-            currentX += spacing / 2;
+            const avail = totalWidth - this.padding * 2 - contentWidth;
+            extraSpacing = avail / this.children.length;
+            currentX += extraSpacing / 2;
         }
 
         for (let i = 0; i < this.children.length; i++) {
             const child = this.children[i];
 
-            // Position child horizontally based on justify
             if (this.justify === LayoutJustify.CENTER) {
-                // Center all children as a group
-                const groupWidth = this.children.reduce((sum, c) => sum + c.width, 0) + (this.children.length - 1) * this.padding;
+                const groupWidth = contentWidth;
                 currentX = this.x - groupWidth / 2;
                 for (let j = 0; j <= i; j++) {
-                    if (j > 0) currentX += this.children[j-1].width + this.padding;
+                    if (j > 0) currentX += this.children[j-1].width + this.gutter;
                 }
             } else if (this.justify === LayoutJustify.END) {
                 currentX = this.x + totalWidth / 2 - this.padding - child.width;
                 for (let j = this.children.length - 1; j > i; j--) {
-                    currentX -= this.children[j].width + this.padding;
+                    currentX -= this.children[j].width + this.gutter;
                 }
             } else {
-                // START, SPACE_BETWEEN, SPACE_AROUND
-                if (i > 0) currentX += this.children[i-1].width + this.padding + spacing;
+                if (i > 0) currentX += this.children[i-1].width + this.gutter + extraSpacing;
             }
 
-            // Position child vertically based on align
-            let childY = startY;
-            if (this.align === LayoutAlign.CENTER) {
-                childY = startY;
+            const contentTop = this.y - contentHeight / 2;
+            let childY: number;
+            if (this.align === LayoutAlign.START) {
+                childY = contentTop + child.height / 2;
+            } else if (this.align === LayoutAlign.CENTER) {
+                childY = this.y;
             } else if (this.align === LayoutAlign.END) {
-                childY = startY + totalHeight / 2 - child.height / 2;
+                childY = contentTop + contentHeight - child.height / 2;
             } else if (this.align === LayoutAlign.STRETCH && child.layoutCanResizeMe) {
-                child.height = totalHeight;
-                childY = startY;
+                child.height = contentHeight;
+                childY = this.y;
+            } else {
+                childY = this.y;
             }
 
-            // Handle maximize flags
             if (child.maximizeX && child.layoutCanResizeMe) {
                 child.width = totalWidth / this.children.length;
             }
@@ -153,75 +203,86 @@ export class Row extends LayoutContainer {
             }
 
             child.setLocation(currentX + child.width / 2, childY);
+            this.syncAttachOffset(child);
         }
     }
 }
 
 export class Column extends LayoutContainer {
     layout() {
-        if (this.children.length === 0) return;
+        if (this.children.length === 0) {
+            this.height = this.explicitHeight ?? 0;
+            this.width = this.explicitWidth ?? 0;
+            return;
+        }
 
-        const totalHeight = this.explicitHeight || this.getContentHeight();
-        const totalWidth = this.explicitWidth || Math.max(...this.children.map(c => c.width));
+        const totalChildrenHeight = this.children.reduce((sum, c) => sum + c.height, 0);
+        const totalGutters = Math.max(0, this.children.length - 1) * this.gutter;
+        const contentHeight = totalChildrenHeight + totalGutters;
+        const totalHeight = this.explicitHeight ?? (this.padding * 2 + contentHeight);
+
+        const contentWidth = Math.max(...this.children.map(c => c.width));
+        const totalWidth = this.explicitWidth ?? (this.padding * 2 + contentWidth);
 
         this.width = totalWidth;
         this.height = totalHeight;
 
-        const startX = this.x;
-        let currentY = this.y - totalHeight / 2 + this.padding;
+        const startY = this.y - totalHeight / 2 + this.padding;
+        let currentY = startY;
 
-        // Calculate spacing based on justify
-        let spacing = 0;
+        let extraSpacing = 0;
         if (this.justify === LayoutJustify.SPACE_BETWEEN && this.children.length > 1) {
-            const availableSpace = totalHeight - this.padding * 2 - this.children.reduce((sum, c) => sum + c.height, 0);
-            spacing = availableSpace / (this.children.length - 1);
+            const avail = totalHeight - this.padding * 2 - contentHeight;
+            extraSpacing = avail / (this.children.length - 1);
         } else if (this.justify === LayoutJustify.SPACE_AROUND && this.children.length > 1) {
-            const availableSpace = totalHeight - this.padding * 2 - this.children.reduce((sum, c) => sum + c.height, 0);
-            spacing = availableSpace / this.children.length;
-            currentY += spacing / 2;
+            const avail = totalHeight - this.padding * 2 - contentHeight;
+            extraSpacing = avail / this.children.length;
+            currentY += extraSpacing / 2;
         }
 
         for (let i = 0; i < this.children.length; i++) {
             const child = this.children[i];
 
-            // Position child vertically based on justify
             if (this.justify === LayoutJustify.CENTER) {
-                // Center all children as a group
-                const groupHeight = this.children.reduce((sum, c) => sum + c.height, 0) + (this.children.length - 1) * this.padding;
+                const groupHeight = contentHeight;
                 currentY = this.y - groupHeight / 2;
                 for (let j = 0; j <= i; j++) {
-                    if (j > 0) currentY += this.children[j-1].height + this.padding;
+                    if (j > 0) currentY += this.children[j-1].height + this.gutter;
                 }
             } else if (this.justify === LayoutJustify.END) {
                 currentY = this.y + totalHeight / 2 - this.padding - child.height;
                 for (let j = this.children.length - 1; j > i; j--) {
-                    currentY -= this.children[j].height + this.padding;
+                    currentY -= this.children[j].height + this.gutter;
                 }
             } else {
-                // START, SPACE_BETWEEN, SPACE_AROUND
-                if (i > 0) currentY += this.children[i-1].height + this.padding + spacing;
+                if (i > 0) currentY += this.children[i-1].height + this.gutter + extraSpacing;
             }
 
-            // Position child horizontally based on align
-            let childX = startX;
-            if (this.align === LayoutAlign.CENTER) {
-                childX = startX;
+            const contentLeft = this.x - contentWidth / 2;
+            let childX: number;
+            if (this.align === LayoutAlign.START) {
+                childX = contentLeft + child.width / 2;
+            } else if (this.align === LayoutAlign.CENTER) {
+                childX = this.x;
             } else if (this.align === LayoutAlign.END) {
-                childX = startX + totalWidth / 2 - child.width / 2;
+                childX = contentLeft + contentWidth - child.width / 2;
             } else if (this.align === LayoutAlign.STRETCH && child.layoutCanResizeMe) {
-                child.width = totalWidth;
-                childX = startX;
+                child.width = contentWidth;
+                childX = this.x;
+            } else {
+                childX = this.x;
             }
 
-            // Handle maximize flags
             if (child.maximizeX && child.layoutCanResizeMe) {
-                child.width = totalWidth;
+                child.width = contentWidth;
+                childX = this.x;
             }
             if (child.maximizeY && child.layoutCanResizeMe) {
                 child.height = totalHeight / this.children.length;
             }
 
             child.setLocation(childX, currentY + child.height / 2);
+            this.syncAttachOffset(child);
         }
     }
 }

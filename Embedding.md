@@ -212,8 +212,8 @@ This empties every game collection and resets the camera position.
 | `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight, click press indication, disabled state, and configurable icon layout (`IconLayout` type). |
 | `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
 | `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`. |
-| `Row` | Horizontal layout container. |
-| `Column` | Vertical layout container. |
+| `Row` | Horizontal layout container with padding, gutter, alignment, and optional borders. |
+| `Column` | Vertical layout container with padding, gutter, alignment, and optional borders. |
 | `Page` | Page with optional border. |
 | `ScrollablePage` | Scrollable page container. |
 
@@ -729,6 +729,84 @@ at its current position. Calling `moveTo()` also cancels the orbit
 |--------|-------------|
 | `circleAround(options)` | Start circular orbit. Cancels any active `moveTo`. |
 | `cancelCircleAround()` | End orbit immediately. Object stays at current position. |
+
+---
+
+## Layout Containers
+
+`Row` and `Column` lay out child `GameObject`s in horizontal or vertical stacks,
+with configurable padding, gutters, alignment, and optional borders.
+
+```typescript
+const panel = new Column(400, 300);
+panel.setPadding(20);
+panel.setGutter(10);
+panel.setBorder(2, "#FFFFFF");
+
+// Children are positioned by layout()
+panel.addChild(button1);
+panel.addChild(button2);
+panel.layout();
+```
+
+### Padding & gutter
+
+- **`padding`** — space between the container's edge and its children (default 0).
+- **`gutter`** — space between adjacent children (default 0). Separate from padding.
+
+```typescript
+panel.setPadding(16);   // 16px inset from all edges
+panel.setGutter(8);     // 8px between each child
+```
+
+### Borders
+
+Set a border width and colour on any `LayoutContainer`:
+
+```typescript
+panel.setBorder(3, "#00FF00");   // 3px green border
+// Omit colour to keep the existing borderColor (default "#000000"):
+panel.setBorder(2);
+```
+
+Borders render as a stroked rect at the container's bounding box. The container
+is automatically added to the draw loop so the border is visible.
+
+### Alignment
+
+```typescript
+panel.setJustify(LayoutJustify.CENTER);      // group children vertically/horizontally centered
+panel.setAlign(LayoutAlign.STRETCH);         // stretch children to fill cross-axis
+```
+
+### Child positioning
+
+After `layout()` runs, each child's attach offset is updated so that moving the
+container repositions all children correctly.
+
+### API reference
+
+**`LayoutContainer` fields**
+
+| Member | Type | Default | Description |
+|--------|------|---------|-------------|
+| `padding` | `number` | `0` | Edge inset in board units. |
+| `gutter` | `number` | `0` | Space between children in board units. |
+| `borderWidth` | `number` | `0` | Border thickness. `0` = no border. |
+| `borderColor` | `string` | `"#000000"` | Border stroke colour. |
+
+**`LayoutContainer` methods**
+
+| Method | Description |
+|--------|-------------|
+| `setPadding(n)` | Set padding and re-layout. |
+| `setGutter(n)` | Set gutter and re-layout. |
+| `setBorder(width, color?)` | Set border width and optional colour. |
+| `setJustify(j)` | Set justify mode (`START`, `CENTER`, `END`, `SPACE_BETWEEN`, `SPACE_AROUND`). |
+| `setAlign(a)` | Set align mode (`START`, `CENTER`, `END`, `STRETCH`). |
+| `addChild(child)` | Add a child GameObject. |
+| `removeChild(child)` | Remove a child. |
+| `layout()` | Recalculate child positions. Called automatically by setters. |
 
 ---
 
