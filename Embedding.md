@@ -49,6 +49,26 @@ initEngine(canvas, debugDiv, clickToBegin = true, setupFn = defaultSetup)
 
 ---
 
+## Coordinate System
+
+SimpleGame uses an abstract **board space** for all positions and sizes. The
+board is defined by `boardWidth` × `boardHeight` (set via `setBoardSize()`).
+
+- All positions (`GameObject.x`, `GameObject.y`, `createText` coordinates,
+  `center` in `circleAround`, etc.) and distances (`radius`, `width`,
+  `height`, `padding`, `gutter`, `velocity`) are in **board units**.
+- The canvas is a **viewport** into the board. The engine draws objects at
+  `(object.x - windowX, object.y - windowY)` canvas pixels, where
+  `windowX`/`windowY` are the current scroll offset.
+- By default `windowX = windowY = 0` and the canvas is sized to the board,
+  so one board unit equals one canvas pixel. Scrolling the viewport,
+  resizing the canvas, or zooming breaks this 1:1 mapping.
+
+Board units have no inherent physical scale — you choose what one unit
+represents (e.g., 1 pixel, 1 metre, 1 tile).
+
+---
+
 ## Controlling the Game
 
 Pass your own setup function as the fourth argument to `initEngine`:
