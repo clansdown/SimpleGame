@@ -284,6 +284,9 @@ export class GameObject {
     /** Opacity multiplier (0–1) for rendering. 1 = fully opaque (default — skipped for performance). */
     opacity: number = 1;
 
+    /** Draw order. Lower values draw first (behind), higher values draw on top. Same-index objects preserve insertion order. Default 0. */
+    zIndex: number = 0;
+
     gameclass : GameObjectClass;
 
     isHovered: boolean = false;

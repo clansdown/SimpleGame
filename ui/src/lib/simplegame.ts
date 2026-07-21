@@ -525,7 +525,7 @@ function draw() {
     }
 
     /* Objects */
-    for(const object of gameObjects) {
+    for(const object of [...gameObjects].sort((a, b) => a.zIndex - b.zIndex)) {
         if (isVisible(object)) {
             object.draw(ctx, windowX, windowY);
         }

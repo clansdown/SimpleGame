@@ -633,6 +633,18 @@ panel.setVisible(true);
 |---|---|---|---|
 | `visible` | `boolean` | `true` | Set directly or via `setVisible()` on containers. |
 | `opacity` | `number` | `1` | Opacity multiplier (0–1) for rendering. `1` = fully opaque (default — no performance cost; `globalAlpha` is not touched). `0` = fully invisible. Compounds with fade-in/out effects. |
+| `zIndex` | `number` | `0` | Draw order. Lower values draw first (behind), higher values draw on top. Same-index objects preserve insertion order. |
+
+### Z-Order
+
+Set `zIndex` to control draw order. Lower values draw first (behind), higher
+values draw on top. Default is `0`. Objects with the same `zIndex` preserve
+their insertion order.
+
+```typescript
+background.zIndex = -10;   // behind everything
+ui_panel.zIndex = 100;     // on top of everything
+```
 
 ---
 
