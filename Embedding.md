@@ -377,6 +377,31 @@ button.setDisabled(false);  // normal
 
 When disabled: base color is used (no hover/click tints), a 40% gray overlay is drawn, and all mouse events (hover, click, drag) are suppressed via `canDrag()` returning `false`.
 
+### Tooltips
+
+Any `GameObject` can be used as a tooltip on a button. The tooltip appears when
+hovering over the button for 1 second, or when pressing and holding the button
+for 1 second without dragging.
+
+```typescript
+const label = textClass.spawnAt(0, 0, "Save your progress");
+label.zIndex = 100;
+saveButton.setTooltip(label);
+
+// Customise timing
+saveButton.setTooltipDelay(1000);           // 1s before showing (default)
+saveButton.setTooltipFadeDuration(200);     // fade in/out over 200ms (default)
+```
+
+Behaviour:
+- **Show**: Hover for 1s, or press-and-hold for 1s (no drag)
+- **Hide**: Release mouse, move cursor away, or start dragging
+- **Fade**: Fades in/out over the configured duration
+- **Position**: Centered below the button, updated every frame
+
+The caller supplies any `GameObject` — the button only manages `visible`,
+`opacity`, `x`, and `y`. You control appearance (size, colour, zIndex, etc.).
+
 ### Mouseover events
 
 Any `GameObject` (not just buttons) can listen for hover:
@@ -400,6 +425,9 @@ The `isHovered` boolean is updated every frame for all game objects.
 | `setIconHeight(h)` | Icon render height in pixels (default 16). |
 | `setIconPadding(pad)` | Gap between icon and text (default 8). |
 | `setIconLayout(layout)` | `"left"` \| `"right"` \| `"above"` (default) \| `"below"`. |
+| `setTooltip(obj)` | Assign any `GameObject` as the tooltip (or `null` to remove). |
+| `setTooltipDelay(ms)` | Milliseconds of hover/press before tooltip appears (default 1000). |
+| `setTooltipFadeDuration(ms)` | Fade in/out duration in ms (default 200). |
 
 `ButtonOptions` fields: `width`, `height`, `backgroundImage`, `color`,
 `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`.

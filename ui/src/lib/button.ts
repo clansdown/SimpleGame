@@ -51,6 +51,17 @@ export class Button extends GameObject {
     disabled: boolean = false;
     onClickCallback?: () => void;
 
+    /** Tooltip object — caller-supplied GameObject shown on hover/hold */
+    tooltip: GameObject | null = null;
+    tooltipDelay: number = 1000;
+    tooltipFadeDuration: number = 200;
+    tooltipVisible: boolean = false;
+    tooltipIsFadingIn: boolean = false;
+    tooltipIsFadingOut: boolean = false;
+    tooltipFadeElapsed: number = 0;
+    tooltipTimerId: ReturnType<typeof setTimeout> | null = null;
+    tooltipOffset: number = 10;
+
     constructor(gameclass: ButtonClass, x: number, y: number, text?: string | null,
                 iconFile?: string | null, options?: ButtonOptions) {
         super(gameclass, x, y);
@@ -149,20 +160,32 @@ export class Button extends GameObject {
         // Mouseover highlight
         this.onMouseOver(0, () => {
             if (this.disabled) return;
-            if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseOver`); });
+            if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseOver`);
+            this._startTooltipTimer(); });
         this.onMouseOut(0, () => {
             if (this.disabled) return;
-            if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseOut`); });
+            if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseOut`);
+            this._cancelTooltipTimer();
+            this._hideTooltip(); });
 
         // Click press indication
         this.onMouseDown(0, () => {
             if (this.disabled) return;
             if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseDown`);
-            this.isClicked = true; });
+            this.isClicked = true;
+            this._startTooltipTimer(); });
         this.onMouseUp(0, () => {
             if (this.disabled) return;
             if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": mouseUp`);
-            this.isClicked = false; });
+            this.isClicked = false;
+            this._cancelTooltipTimer();
+            this._hideTooltip(); });
+
+        // Cancel tooltip when drag begins
+        this.onDragStart(0, () => {
+            if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": dragStart`);
+            this._cancelTooltipTimer();
+            this._hideTooltip(); });
 
         // Automatically install onClick handler for left mouse button
         this.onClick(0, () => {
@@ -181,6 +204,25 @@ export class Button extends GameObject {
     setOnClick(callback: () => void) {
         if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": onClick registered`);
         this.onClickCallback = callback;
+    }
+
+    setTooltip(obj: GameObject | null): void {
+        if (this.tooltip && this.tooltip !== obj) {
+            this._hideTooltip();
+            this.tooltip.visible = false;
+        }
+        this.tooltip = obj;
+        if (obj) {
+            obj.visible = false;
+        }
+    }
+
+    setTooltipDelay(ms: number): void {
+        this.tooltipDelay = ms;
+    }
+
+    setTooltipFadeDuration(ms: number): void {
+        this.tooltipFadeDuration = ms;
     }
 
     setDisabled(disabled: boolean): void {
@@ -217,6 +259,71 @@ export class Button extends GameObject {
 
     setIconLayout(layout: IconLayout): void {
         this.iconLayout = layout;
+    }
+
+    // --- Tooltip internal helpers ---
+
+    _startTooltipTimer(): void {
+        if (!this.tooltip || this.tooltipVisible || this.tooltipIsFadingIn || this.tooltipIsFadingOut) return;
+        this._cancelTooltipTimer();
+        this.tooltipTimerId = setTimeout(() => this._showTooltip(), this.tooltipDelay);
+    }
+
+    _cancelTooltipTimer(): void {
+        if (this.tooltipTimerId != null) {
+            clearTimeout(this.tooltipTimerId);
+            this.tooltipTimerId = null;
+        }
+    }
+
+    _showTooltip(): void {
+        if (!this.tooltip) return;
+        this.tooltipVisible = true;
+        this.tooltipIsFadingIn = true;
+        this.tooltipIsFadingOut = false;
+        this.tooltipFadeElapsed = 0;
+        this.tooltip.visible = true;
+        this.tooltip.opacity = 0;
+        this.tooltip.x = this.x;
+        this.tooltip.y = this.y + this.height / 2 + this.tooltipOffset;
+    }
+
+    _hideTooltip(): void {
+        this._cancelTooltipTimer();
+        if (!this.tooltip || !this.tooltipVisible) return;
+        this.tooltipIsFadingIn = false;
+        this.tooltipIsFadingOut = true;
+        this.tooltipFadeElapsed = 0;
+    }
+
+    doMovement(dt: number): void {
+        super.doMovement(dt);
+
+        if (this.tooltipIsFadingIn || this.tooltipIsFadingOut) {
+            this.tooltipFadeElapsed += dt * 1000;
+            const progress = Math.min(this.tooltipFadeElapsed / this.tooltipFadeDuration, 1);
+
+            if (this.tooltipIsFadingIn) {
+                this.tooltip!.opacity = progress;
+                if (progress >= 1) {
+                    this.tooltipIsFadingIn = false;
+                    this.tooltipFadeElapsed = 0;
+                }
+            } else {
+                this.tooltip!.opacity = 1 - progress;
+                if (progress >= 1) {
+                    this.tooltipIsFadingOut = false;
+                    this.tooltipVisible = false;
+                    this.tooltip!.visible = false;
+                    this.tooltipFadeElapsed = 0;
+                }
+            }
+        }
+
+        if (this.tooltipVisible && this.tooltip) {
+            this.tooltip.x = this.x;
+            this.tooltip.y = this.y + this.height / 2 + this.tooltipOffset;
+        }
     }
 
     /**
@@ -309,13 +416,17 @@ export class Button extends GameObject {
                 }
                 case "above": {
                     const iconX = -this.iconWidth / 2;
-                    const iconY = -this.height / 2 + this.iconPadding;
+                    const iconY = this.text
+                        ? -this.height / 2 + this.iconPadding
+                        : -this.iconHeight / 2;
                     ctx.drawImage(this.icon!, iconX, iconY, this.iconWidth, this.iconHeight);
                     break;
                 }
                 case "below": {
                     const iconX = -this.iconWidth / 2;
-                    const iconY = this.height / 2 - this.iconPadding - this.iconHeight;
+                    const iconY = this.text
+                        ? this.height / 2 - this.iconPadding - this.iconHeight
+                        : -this.iconHeight / 2;
                     ctx.drawImage(this.icon!, iconX, iconY, this.iconWidth, this.iconHeight);
                     break;
                 }
