@@ -40,6 +40,8 @@ import type { Position2D, vec2 } from "./util";
  *   indefinitely (or until cancelCircleAround() is called).
  * @param arcDeg - Total arc to sweep in degrees. Takes precedence
  *   over arcRad. Omit for indefinite orbit.
+ * @param direction - 1 = clockwise (default), -1 = counter-clockwise.
+ *   Affects which way the arc is swept.
  * @param onComplete - Called once after the arc is fully traversed.
  *   The object is snapped to the exact final position before the
  *   callback fires.
@@ -55,6 +57,7 @@ export interface CircleAroundOptions {
     fadeOutTime?: number;
     arcRad?: number;
     arcDeg?: number;
+    direction?: number;
     onComplete?: () => void;
 }
 
@@ -251,7 +254,9 @@ export class GameObject {
         center: Position2D | GameObject;
         radius: number;
         currentAngle: number;
+        startAngle: number;
         angularVelocity: number;
+        direction: number;
         elapsed: number;
         facingX: number;
         facingY: number;
@@ -529,9 +534,12 @@ export class GameObject {
             ? options.startAngleDeg * Math.PI / 180
             : options.startAngleRad ?? 0;
 
-        const arcRad = options.arcDeg != null
+        const rawArcRad = options.arcDeg != null
             ? options.arcDeg * Math.PI / 180
             : options.arcRad ?? null;
+        const arcRad = rawArcRad != null ? Math.abs(rawArcRad) : null;
+
+        const direction = options.direction != null ? (options.direction >= 0 ? 1 : -1) : 1;
 
         const facingX = options.facing?.x ?? 1;
         const facingY = options.facing?.y ?? 0;
@@ -545,7 +553,9 @@ export class GameObject {
             center: options.center,
             radius: options.radius,
             currentAngle: startAngleRad,
+            startAngle: startAngleRad,
             angularVelocity: options.velocity / options.radius,
+            direction: options.direction ?? 1,
             elapsed: 0,
             facingX: normFacingX,
             facingY: normFacingY,
@@ -701,13 +711,14 @@ export class GameObject {
             fadeMul = state.elapsed / state.fadeInTime;
         }
 
-        // --- Angular step ---
+        // --- Angular step (positive magnitude) ---
         let angleStep = state.angularVelocity * dt * fadeMul;
 
         // --- Fade-out: ramp to 0 as remaining arc shrinks ---
         let completed = false;
         if (state.arcRad != null) {
-            const remaining = state.arcRad - state.completedArcRad;
+            const totalArc = Math.abs(state.arcRad);
+            const remaining = totalArc - state.completedArcRad;
             if (remaining <= 0.0001) {
                 completed = true;
                 angleStep = 0;
@@ -721,15 +732,16 @@ export class GameObject {
 
         // --- Clamp to remaining arc ---
         if (state.arcRad != null && !completed) {
-            const remaining = state.arcRad - state.completedArcRad;
+            const totalArc = Math.abs(state.arcRad);
+            const remaining = totalArc - state.completedArcRad;
             if (angleStep >= remaining) {
                 angleStep = remaining;
                 completed = true;
             }
         }
 
-        // --- Apply step ---
-        state.currentAngle += angleStep;
+        // --- Apply step (direction-aware) ---
+        state.currentAngle += angleStep * state.direction;
         state.completedArcRad += angleStep;
         state.elapsed += dt;
 

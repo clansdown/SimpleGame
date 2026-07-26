@@ -1018,6 +1018,19 @@ drone.circleAround({
 });
 ```
 
+```typescript
+// Counter-clockwise swing — 90 degrees with smooth stop
+enemy.circleAround({
+    center: { x: 500, y: 300 },
+    radius: 150,
+    velocity: 100,
+    startAngleDeg: 0,
+    arcDeg: 90,
+    direction: -1,
+    fadeOutTime: 0.3,
+});
+```
+
 ### Arc limits
 
 When `arcDeg` or `arcRad` is set, the object sweeps exactly that angle
@@ -1057,8 +1070,9 @@ at its current position. Calling `moveTo()` also cancels the orbit
 | `facing` | `{x: number, y: number}` | `{x: 1, y: 0}` | Direction the object faces in a local frame where x=clockwise tangent, y=radially outward from centre. |
 | `fadeInTime` | `number` | `0` | Seconds to ramp velocity from 0 to full at the start. |
 | `fadeOutTime` | `number` | `0` | Seconds to ramp velocity to 0 near the end of the arc. Only used when `arcDeg`/`arcRad` is set. |
-| `arcRad` | `number` | — | Total arc to sweep in radians. Omit for indefinite orbit. |
+| `arcRad` | `number` | — | Total arc to sweep in radians. Omit for indefinite orbit. Direction (`+`/`-`) is ignored — use `direction` instead. |
 | `arcDeg` | `number` | — | Total arc to sweep in degrees. Takes precedence over `arcRad`. Omit for indefinite orbit. |
+| `direction` | `number` | `1` | Swing direction: `1` = clockwise (default), `-1` = counter-clockwise. |
 | `onComplete` | `() => void` | — | Called once after the arc is fully traversed. The object is snapped to the exact final position before the callback fires. |
 
 ### Methods
