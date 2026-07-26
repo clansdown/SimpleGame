@@ -177,7 +177,13 @@ This empties every game collection and resets the camera position.
 | `togglePause()` | function | Toggle pause state. |
 | `isPaused()` | function | Returns `boolean` — `true` if the game is paused. |
 | `onKeyDown(key, fn)` / `onKeyUp(key, fn)` | function | Keyboard input hooks. |
-| `onMouseClick(button, fn)` | function | Mouse click hook. |
+| `onMouseClick(button, fn)` | function | **Global** mouse click fallback. Fires when no matching object (by z-order targeting) has an `onClick` handler and mouseup occurs within 600ms of mousedown. For per-object clicks, use `obj.onClick()` instead — see [Z-Order](#z-order) for how the topmost handler-owning object is selected. |
+| `onButtonDown(btn, fn)` | function | ⚠️ Not yet implemented — no-op stub. |
+| `onButtonUp(btn, fn)` | function | ⚠️ Not yet implemented — no-op stub. |
+| `afterDraw(fn)` | function | Registers a callback that runs after all game objects are drawn each frame. Receives `(ctx, offsetX, offsetY)`. Useful for overlays. |
+| `setButtonDebugLevel(level)` | function | Enable `[ButtonDebug]` logs. `0`=off, `1`=events, `10`=per-object geometry. |
+| `collisionActions` | `CollisionAction[]` | Active collision action registry. Read by the engine each frame. |
+| `CollisionAction` | class | `{ sourceGameClass, sourceGameObject, targetGameClass, targetGameObject, work }` — internal collision action record. |
 | `gameObjects` | `Set<GameObject>` | All active game objects. |
 | `players` | `Player[]` | Active players. |
 | `enemies` | `Set<Enemy>` | Active enemies. |
@@ -189,15 +195,15 @@ This empties every game collection and resets the camera position.
 
 | Export | Kind | Description |
 |---|---|---|
-| `GameObjectClass` | class | Base class for object types (defines image, defaults). `defaultSingleCollisionOnly` sets the default for spawned instances. |
-| `GameObject` | class | Base game object. Provides `onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`, `onArrival`, `logMovement`. Supports sprite mirroring with `mirrorOnDirection` / `spriteForwardVector`. `singleCollisionOnly` stops collision checks after the first hit per frame. `visible` controls both rendering and interaction (hiding a container hides all attached children). |
-| `PlayerClass` / `Player` | class | Player-controllable object. |
+| `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
+| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), keyboard (`onKeyDown`/`onKeyUp`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
+| `PlayerClass` / `Player` | class | Player-controllable object with keyboard input (`enableArrowKeysMovement`, `enableWasdKeysMovement`). Uses `speed` as max cap, `acceleration` as ramp time, and `x_speed`/`y_speed` for axis movement. Overrides `standardMovement = false`. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
 | `ItemClass` / `Item` | class | Collectible / neutral object. |
 | `EffectClass` / `Effect` | class | Visual effect (animated, auto-destroy). |
-| `TextClass` / `Text` | class | Text overlay with highlight, drop shadow, alignment, and inline image support (`{img:name}` syntax). |
-| `createText(text, pos, inlineImages?)` | function | Convenience factory for `Text`. |
+| `TextClass` / `Text` | class | Text overlay with highlight, drop shadow, alignment, and inline image support (`{img:name}` syntax). Fields: `size` (px), `foreground` (colour). |
+| `createText(text, pos, inlineImages?)` | function | Convenience factory — returns `textClass.spawnAt(text, pos, inlineImages)`. |
 | `InlineImageDef` | interface | `{ image: HTMLImageElement \| string, width: number, height: number }` — inline image definition. |
 | `InlineImageMap` | type | `Record<string, InlineImageDef>` — map of identifiers to inline image definitions. |
 
@@ -222,20 +228,21 @@ This empties every game collection and resets the camera position.
 
 | Export | Description |
 |---|---|
-| `Music(url)` | Looping background music. |
-| `SoundEffect(url)` | One-shot sound effect. |
+| `Music(url)` | Looping background music. Methods: `setVolume(0–1)`, `setLoop(bool)`, `stop()`, `pause()`. |
+| `SoundEffect(url)` | One-shot sound effect. Methods: `play()`. |
 
 ### UI (`button.ts`, `layout.ts`)
 
 | Export | Description |
 |---|---|
-| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight, click press indication, disabled state, and configurable icon layout (`IconLayout` type). |
+| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight (`hoverColor`), click press indication (`clickColor`), disabled state (`disabled`), background alpha (`backgroundOpacity`), tooltip support, and configurable icon layout (`IconLayout`). |
 | `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
 | `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`. |
-| `Row` | Horizontal layout container with padding, gutter, alignment, and optional borders. |
-| `Column` | Vertical layout container with padding, gutter, alignment, and optional borders. |
-| `Page` | Page with optional border. |
-| `ScrollablePage` | Scrollable page container. |
+| `LayoutContainer` | Base class for `Row`, `Column`, `Page`, `ScrollablePage`. Provides `padding`, `gutter`, `borderWidth`/`borderColor`, `setJustify()`, `setAlign()`, `addChild()`/`removeChild()`, `layout()`. |
+| `Row` | Horizontal layout container (extends `LayoutContainer`). |
+| `Column` | Vertical layout container (extends `LayoutContainer`). |
+| `Page` | Page container with `topRow`, `bottomRow`, `leftColumn`, `rightColumn`, `centerColumn` sub-containers. |
+| `ScrollablePage` | Scrollable page container with `scrollOffset`, `scrollbar`, `setContentHeight()`, `scroll(delta)`. |
 
 ---
 
@@ -416,7 +423,7 @@ The `isHovered` boolean is updated every frame for all game objects.
 ### Button API reference
 
 | Member | Description |
-|---|---|
+|---|---|---|
 | `setText(text)` | Change the button label. |
 | `setOnClick(callback)` | Register a click handler. |
 | `setDisabled(disabled)` | Enable/disable the button. |
@@ -428,6 +435,15 @@ The `isHovered` boolean is updated every frame for all game objects.
 | `setTooltip(obj)` | Assign any `GameObject` as the tooltip (or `null` to remove). |
 | `setTooltipDelay(ms)` | Milliseconds of hover/press before tooltip appears (default 1000). |
 | `setTooltipFadeDuration(ms)` | Fade in/out duration in ms (default 200). |
+
+**Settable fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `hoverColor` | `string` | auto-derived | Colour when hovered (auto-brightened from `color`). |
+| `clickColor` | `string` | auto-derived | Colour when pressed (auto-darkened from `color`). |
+| `disabled` | `boolean` | `false` | When `true`, suppresses all interaction and draws a 40% gray overlay. |
+| `backgroundOpacity` | `number` | `1.0` | Alpha for the background layer only (fill, image, border). Icon, text, and disabled overlay unaffected. |
 
 `ButtonOptions` fields: `width`, `height`, `backgroundImage`, `color`,
 `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`.
@@ -583,11 +599,48 @@ The transform is: compute the signed angle from `spriteForwardVector` to the fac
 | `spriteForwardVector` | `vec2` | inherited from class | `GameObject` | Per-instance override (rarely needed). |
 | `mirrorOnDirection` | `boolean` | `false` | `GameObject` | Enable mirror when the required rotation > 90°. |
 
+### Orientation helpers
+
+These methods set the object's facing direction (and thus which way the sprite
+points). They update `orientation`, `direction_x`, and `direction_y` together.
+
+| Method | Description |
+|--------|-------------|
+| `setOrientation(degrees)` | Set facing from degrees. 0 = up, 90 = right, 180 = down. |
+| `setOrientationRadians(radians)` | Set facing from radians. 0 = up, π/2 = right. |
+| `setOrientationTowards(position)` | Point toward a target position `{x, y}`. Updates every call — use in `everyTick` for tracking behaviour. |
+
+```typescript
+// Point toward the mouse every frame
+everyTick(() => {
+    enemy.setOrientationTowards(getMousePosition());
+});
+```
+
 ---
 
-## Arrival Callback
+## Movement (`moveTo`)
 
-Register a callback to fire when a `moveTo` movement completes:
+Move an object toward a destination over a given time. The engine handles
+acceleration, direction, deceleration, and arrival detection.
+
+```typescript
+enemy.moveTo({x: 1000, y: 500}, 3.0);
+```
+
+The object's orientation is automatically set to face the destination.
+Velocity is calculated to arrive on schedule.
+
+### Deceleration
+
+The object slows down as it approaches the target for a smooth stop:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `decelerationDistance` | `4` | Distance from destination where deceleration begins. Larger values = earlier slowdown. |
+| `decelerationTime` | `1.0` | Minimum velocity divisor during final approach. Higher values = slower crawl into position. |
+
+### Arrival callback
 
 ```typescript
 enemy.moveTo({x: 1000, y: 500}, 3.0);
@@ -601,21 +654,77 @@ The callback fires once when the object comes within 0.01 units of its
 destination. The object is snapped to the exact destination coordinates
 before the callback runs.
 
-### API reference
+### moveTo vs setOrientationTowards
 
-| Member | Description |
-|---|---|
-| `onArrival(callback)` | Register a callback that fires when `moveTo` reaches its destination. |
+Calling `moveTo` sets both `destination` (for movement) and orientation
+(toward the target). To point an object toward a target without moving,
+use `setOrientationTowards()` instead.
+
+### Speed vs velocity
+
+- `speed` — maximum possible speed cap (default 200). Used by `Player` keyboard
+  input and as the default for `Projectile` / `Item`.
+- `velocity` — current speed along the direction vector. Used by `moveTo` and
+  the base `doMovement` system.
+- `setSpeed(n)` sets **`velocity`**, not `speed`. This is a common point of
+  confusion.
+
+### Other movement helpers
+
+| Method | Description |
+|--------|-------------|
+| `moveTo(position, time)` | Move to a position in the given time (seconds). Cancels any active `circleAround`. |
+| `move(vector)` | Translate by `[dx, dy]`. Updates attachments. |
+| `setLocation(x, y)` | Absolute position set. Updates attachments. |
+| `onArrival(callback)` | Fires when `moveTo` reaches its destination. |
 
 ---
 
-## Collision Behaviour
+## Collisions
+
+Register collision handlers at the class level (fires for all instances) or the
+instance level (fires only for specific objects).
+
+All collision checks are performed every frame by the engine using the
+`collisionActions` registry. Handlers receive the two colliding objects.
+
+### Class-level registration
+
+Set up once on the class — fires for every instance when it hits any instance
+of the target class:
+
+```typescript
+bulletClass.onCollisionWith(enemyClass, (bullet, enemy) => {
+    enemy.takeDamage(10);
+    bullet.destroy();
+});
+```
+
+### Instance-level registration
+
+Fires only for that specific object instance:
+
+```typescript
+// This player vs any enemy
+player.onCollisionWith(enemyClass, (enemy) => {
+    player.takeDamage(5);
+});
+
+// This object vs a specific other object
+ball.onCollisionWithParticular(paddle, () => {
+    ball.direction_y *= -1;
+});
+
+// Convenience: this object vs any Enemy
+bullet.onCollisionWithEnemy((enemy) => {
+    enemy.takeDamage(10);
+});
+```
 
 ### Single collision per frame
 
-Set `singleCollisionOnly` on a game object to stop collision detection after
-the first hit each frame. Useful for projectiles so one bullet only hits one
-target.
+Set `singleCollisionOnly` to stop collision detection after the first hit each
+frame. Useful for projectiles so one bullet only hits one target.
 
 ```typescript
 const bullet = bulletClass.spawn(x, y);
@@ -625,15 +734,143 @@ bullet.singleCollisionOnly = true;
 bulletClass.defaultSingleCollisionOnly = true;
 ```
 
-Default is `false` (existing behaviour — one object can collide with multiple
-targets per frame).
+Default is `false` (one object can collide with multiple targets per frame).
 
 ### API reference
 
+| Method | Scope | Signature |
+|--------|-------|-----------|
+| `class.onCollisionWith(otherClass, work)` | Class-level | `(GameObjectClass, (self, other) => void) => void` |
+| `class.onDestroy(work)` | Class-level | `((GameObject) => void) => void` — fires when any instance is destroyed. |
+| `obj.onCollisionWith(otherClass, work)` | Instance | `(GameObjectClass, (other) => void) => void` |
+| `obj.onCollisionWithParticular(otherObj, work)` | Instance | `(GameObject, () => void) => void` |
+| `obj.onCollisionWithEnemy(work)` | Instance | `((GameObject) => void) => void` — convenience for `EnemyClass`. |
+
 | Field | Type | Default | Location | Description |
-|---|---|---|---|---|
-| `defaultSingleCollisionOnly` | `boolean` | `false` | `GameObjectClass` | Set once on the class to control the default for spawned instances. |
-| `singleCollisionOnly` | `boolean` | inherited from class | `GameObject` | Per-instance override. When `true`, only the first collision per frame fires; remaining checks for that object are skipped. |
+|-------|------|---------|----------|-------------|
+| `defaultSingleCollisionOnly` | `boolean` | `false` | `GameObjectClass` | Default for spawned instances. |
+| `singleCollisionOnly` | `boolean` | inherited | `GameObject` | Per-instance override. When `true`, only the first collision per frame fires. |
+
+---
+
+## User Data (`var`)
+
+Every `GameObject` has a `var` field of type `any` for storing custom per-object
+state. This is the idiomatic pattern used in both sample games:
+
+```typescript
+const enemy = enemyClass.spawn(100, 100);
+enemy.var = { hp: 10, level: 3, powerups: [], isBoss: true };
+```
+
+There is no restriction on what you store — use it for health, ammo, scores,
+timers, AI state, or anything else.
+
+---
+
+## Attachments
+
+Attach one game object to another so the child follows the parent's position
+and orientation:
+
+```typescript
+const paddle = playerClass.spawn(400, 900);
+const ball = ballClass.spawn(400, 870);
+
+// Ball follows paddle with an offset
+paddle.attach(ball, 0, -30, 0);
+```
+
+### How it works
+
+- The child's position is recomputed every frame based on the parent's position
+  and orientation plus the offset given at attach-time.
+- Children do not perform independent `doMovement` — they move with their parent.
+- Visibility propagates through the chain: hiding the parent hides all attached
+  children (see [Visibility](#visibility)).
+- The `attachedTo` field on the child is set automatically to the parent.
+
+### Detaching
+
+```typescript
+paddle.detach(ball);  // ball becomes independent
+ball.velocity = 500;  // now it can move on its own
+```
+
+### API reference
+
+| Method | Description |
+|--------|-------------|
+| `parent.attach(child, offsetX, offsetY, orientationOffset)` | Attach `child` to `parent`. The child follows at the given offset. |
+| `parent.detach(child)` | Remove the attachment. The child is no longer updated by the parent. |
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attachedTo` | `GameObject \| null` | The parent this object is attached to, if any. Read-only (set by `attach()`). |
+| `attachedObjects` | `AttachedGameObject[]` | Array of attached children. Managed by `attach()`/`detach()`. |
+
+---
+
+## Player Input
+
+`Player` objects have built-in keyboard input. When movement keys are pressed,
+the player moves in that direction.
+
+### Enabling keyboard controls
+
+```typescript
+const ship = playerClass.spawn(500, 500);
+ship.enableArrowKeysMovement();   // ← ↑ ↓ →
+ship.enableWasdKeysMovement();    // W A S D
+```
+
+Both are enabled by default (`wasdKeys = true`, `arrowKeys = true`). Call either
+method to enable them (idempotent).
+
+### How movement works
+
+- `speed` — maximum speed in board units/second (default 200).
+- `acceleration` — seconds to ramp from 0 to full speed (default 0.5).
+- The player uses `x_speed` / `y_speed` as per-axis velocity components,
+  capped by `speed`. Keyboard input accelerates toward ±`speed` on each axis.
+- The player sets `standardMovement = false`, so the base `doMovement` is
+  skipped. Instead, `Player.doMovement` applies its own axis-based movement.
+- `setSpeed(n)` sets `velocity` (used by `moveTo`), not `speed` (the max cap).
+
+### Brickbreaker example (mouse-following)
+
+```typescript
+const paddle = playerClass.spawn(400, 900);
+everyTick(() => {
+    const mouse = getMousePosition();
+    paddle.x = mouse.x;
+});
+```
+
+### Spacefighter example (keyboard + firing)
+
+```typescript
+ship.enableWasdKeysMovement();
+ship.speed = 400;
+ship.setSpeed(0);
+
+periodically(0.3, () => {
+    const shot = bulletClass.spawnAt(ship);
+    shot.onCollisionWithEnemy((enemy) => { enemy.takeDamage(1); });
+});
+```
+
+### API reference
+
+| Method / Field | Description |
+|----------------|-------------|
+| `enableArrowKeysMovement()` | Enable ← ↑ ↓ → control. |
+| `enableWasdKeysMovement()` | Enable W A S D control. |
+| `wasdKeys` | `boolean` — enable/disable WASD (default `true`). |
+| `arrowKeys` | `boolean` — enable/disable arrow keys (default `true`). |
+| `speed` | Maximum speed cap in board units/sec (default 200). |
+| `acceleration` | Seconds to reach full speed (default 0.5). |
+| `x_speed` / `y_speed` | Current per-axis velocity (set by keyboard input). |
 
 ---
 
@@ -663,15 +900,40 @@ panel.setVisible(true);
 | `opacity` | `number` | `1` | Opacity multiplier (0–1) for rendering. `1` = fully opaque (default — no performance cost; `globalAlpha` is not touched). `0` = fully invisible. Compounds with fade-in/out effects. |
 | `zIndex` | `number` | `0` | Draw order. Lower values draw first (behind), higher values draw on top. Same-index objects preserve insertion order. |
 
+### Lifetime & boundaries
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `maxDurationMillis` | `number` | `0` | Auto-destroy after this many milliseconds. `0` = no auto-destroy. Set via `setMaxDuration(ms)`. |
+| `timeExistedMillis` | `number` | `0` | Accumulated age in milliseconds (read-only, incremented each frame). |
+| `boundToBoard` | `boolean` | `false` | When `true`, position is clamped to `[0, boardWidth] × [0, boardHeight]`. |
+| `destroyIfOffBoard` | `boolean` | `false` | When `true`, the object is destroyed as soon as it leaves the board. Automatically `true` for `Projectile`. |
+| `growInMillis` | `number` | `0` | Scale-in animation duration (ms). The object scales from 0 to 1 over this period at spawn. |
+| `growOutMillis` | `number` | `0` | Scale-out animation duration (ms). The object scales from 1 to 0 before `maxDurationMillis` expires. |
+| `setMaxDuration(ms)` | method | — | Set `maxDurationMillis`. The object is destroyed after `ms` milliseconds. |
+
 ### Z-Order
 
-Set `zIndex` to control draw order. Lower values draw first (behind), higher
-values draw on top. Default is `0`. Objects with the same `zIndex` preserve
-their insertion order.
+Set `zIndex` to control draw order and input targeting. Lower values draw first
+(behind), higher values draw on top. Default is `0`. Objects with the same
+`zIndex` preserve their insertion order.
+
+When the user clicks or taps, the engine finds the **topmost** (highest `zIndex`)
+visible object whose hitbox contains the point and that has at least one mouse
+handler registered (`onMouseDown`, `onMouseUp`, or `onClick`). That object
+**owns** the entire press-release cycle — `onMouseDown`, `onMouseUp`, and
+`onClick` are all delivered exclusively to it. Objects below it receive nothing.
+
+If the topmost handler-owning object is being dragged, its `onClick` is
+suppressed (the click is consumed but not fired). This prevents spurious clicks
+after a drag.
+
+If no matching object has any mouse handler, the global `onMouseClick` fallback
+fires instead (if registered and the mouseup occurs within 600ms of mousedown).
 
 ```typescript
-background.zIndex = -10;   // behind everything
-ui_panel.zIndex = 100;     // on top of everything
+background.zIndex = -10;   // behind everything — never intercepts clicks
+ui_panel.zIndex = 100;     // on top of everything — captures all input
 ```
 
 ### Fade-in / Fade-out
@@ -884,6 +1146,89 @@ container repositions all children correctly.
 | `removeChild(child)` | Remove a child. |
 | `layout()` | Recalculate child positions. Called automatically by setters. |
 
+### Page
+
+`Page` is a full-screen layout with named sub-containers for the top, bottom,
+left, right, and center regions:
+
+```typescript
+const page = new Page(1000, 900);
+page.setTopRow(headerPanel);
+page.setBottomRow(footerPanel);
+page.setLeftColumn(sidebar);
+page.setRightColumn(buttonPanel);
+page.setCenterColumn(mainContent);
+```
+
+| Member | Description |
+|--------|-------------|
+| `topRow` / `bottomRow` | `LayoutContainer` — top/bottom strips. |
+| `leftColumn` / `rightColumn` | `LayoutContainer` — left/right side panels. |
+| `centerColumn` | `LayoutContainer` — main content area. |
+| `setTopRow(row)` / `setBottomRow(row)` | Place a container in the top/bottom region. |
+| `setLeftColumn(col)` / `setRightColumn(col)` | Place a container in the left/right region. |
+| `setCenterColumn(col)` | Place a container in the center. |
+
+### ScrollablePage
+
+`ScrollablePage` extends `Page` with vertical scrolling:
+
+```typescript
+const scrollPage = new ScrollablePage(400, 600);
+scrollPage.setContentHeight(2000);  // tall content
+scrollPage.scroll(50);              // scroll down 50px
+```
+
+| Member | Description |
+|--------|-------------|
+| `scrollOffset` | Current scroll position in board units. |
+| `scrollbar` | Optional `GameObject` used as a scrollbar indicator. |
+| `setContentHeight(height)` | Set the total scrollable content height. |
+| `scroll(delta)` | Scroll by `delta` board units, clamped to bounds. |
+
+---
+
+## Effects
+
+`Effect` objects are visual effects that auto-destroy after a set duration,
+with optional fade-in and fade-out. Use them for explosions, damage numbers,
+particle effects, and screen flashes.
+
+### Creating effects
+
+```typescript
+const explosionClass = new EffectClass("explosion", "explosion.png", 500, 50, 200);
+//                                    name          image_file       duration^  ^fadeIn ^fadeOut
+// Duration in milliseconds, fade-in and fade-out in milliseconds.
+
+// Spawn at a position
+const effect = explosionClass.spawn(200, 300);
+
+// Or spawn at an existing object's position
+explosionClass.spawnAt(targetEnemy);
+```
+
+### Spawning at runtime
+
+```typescript
+// In a collision handler:
+bullet.onCollisionWithEnemy((enemy) => {
+    explosionClass.spawnAt(enemy);
+    enemy.destroy();
+});
+```
+
+### API reference
+
+| Class member | Description |
+|---|---|
+| `EffectClass(name, image, duration?, fadeIn?, fadeOut?)` | Constructor. `duration`/`fadeIn`/`fadeOut` in milliseconds. |
+| `spawn(x, y)` | Spawn at absolute position. |
+| `spawnAt(position)` | Spawn at a `Position2D` or `GameObject`'s position. |
+
+The effect uses `maxDurationMillis`, `fadeInMillis`, `fadeOutMillis` from the
+base `GameObject` — see [Fade-in / Fade-out](#fade-in--fade-out).
+
 ---
 
 ## Text
@@ -950,9 +1295,3 @@ the defined width — no visual jump when the image loads.
 | `setShadow(color, blur?, offsetX?, offsetY?)` | Enable drop shadow with given colour, blur radius (default 4), and offsets (default 2). |
 | `setTextAlign(align)` | `"left"` (default), `"center"`, or `"right"`. |
 | `setInlineImages(images)` | Provide `InlineImageMap` for `{img:name}` syntax. |
-
-### Engine API
-
-| Function | Description |
-|---|---|
-| `setButtonDebugLevel(level)` | Enable `[ButtonDebug]` logs at the given verbosity level. `0` = off, `1` = events, `10` = per-object geometry. |

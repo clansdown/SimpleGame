@@ -25,6 +25,7 @@ const onKeyUpMap = new Map<string, ()=>void>();
 const keyEvents : KeyboardEvent[] = [];
 const onMouseClickMap = new Map<number, (event: MouseEvent, x: number, y: number) => void>();
 const mouseDownTimes = new Map<string, number>();
+const mouseOwner = new Map<number, GameObject>();
 
 export let boardWidth = 10000;
 export let boardHeight = 10000;
@@ -132,15 +133,18 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
     if (initial) {
         mouseDownTimes.set(key, Date.now());
         let hitCount = 0;
-        const downTargets = [...gameObjects];
-        for (const obj of downTargets) {
+        let best: GameObject | null = null;
+        let bestZ = -Infinity;
+
+        for (const obj of gameObjects) {
             if (!isVisible(obj)) continue;
             const hit = isPointInHitbox(obj, boardX, boardY);
             if (hit) {
                 hitCount++;
-                const handler = obj.onMouseDownMap.get(button);
-                if (handler) {
-                    handler(event);
+                const hasHandler = obj.onMouseDownMap.has(button) || obj.onMouseUpMap.has(button) || obj.onClickMap.has(button);
+                if (hasHandler && obj.zIndex > bestZ) {
+                    bestZ = obj.zIndex;
+                    best = obj;
                 }
             }
             if (buttonDebugLevel >= 10) {
@@ -154,6 +158,18 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
                 );
             }
         }
+
+        if (best) {
+            mouseOwner.set(button, best);
+            const handler = best.onMouseDownMap.get(button);
+            if (handler) {
+                handler(event);
+                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseDown: mousedown obj=${best.gameclass.name} button=${button}`);
+            }
+        } else {
+            mouseOwner.delete(button);
+        }
+
         if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseDown: button=${button} checked ${gameObjects.size} objects, ${hitCount} hit`);
     }
 }
@@ -163,30 +179,27 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
     keyMap.set(key, false);
     let clickHandled = false;
     if (initial) {
-        let hitCount = 0;
-        const upTargets = [...gameObjects];
-        for (const obj of upTargets) {
-            if (!isVisible(obj)) continue;
-            if (isPointInHitbox(obj, boardX, boardY)) {
-                hitCount++;
-                const upHandler = obj.onMouseUpMap.get(button);
-                if (upHandler) {
-                    upHandler(event);
-                    if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: up obj=${obj.gameclass.name} button=${button}`);
-                }
-                const clickHandler = obj.onClickMap.get(button);
-                if (clickHandler && !obj.isDragging) {
-                    clickHandler(event);
-                    clickHandled = true;
-                    if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: click obj=${obj.gameclass.name} button=${button}`);
-                }
+        const owner = mouseOwner.get(button);
+        if (owner) {
+            mouseOwner.delete(button);
+            const upHandler = owner.onMouseUpMap.get(button);
+            if (upHandler) {
+                upHandler(event);
+                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: up obj=${owner.gameclass.name} button=${button}`);
+            }
+            const clickHandler = owner.onClickMap.get(button);
+            if (clickHandler && !owner.isDragging) {
+                clickHandler(event);
+                clickHandled = true;
+                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: click obj=${owner.gameclass.name} button=${button}`);
             }
         }
-        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: button=${button} checked ${gameObjects.size} objects, ${hitCount} hit`);
-        const now = Date.now();
-        if (!clickHandled && (now - (mouseDownTimes.get(key) || 0)) <= 600) {
-            const callback = onMouseClickMap.get(button);
-            if (callback) callback(event, boardX, boardY);
+        if (!clickHandled) {
+            const now = Date.now();
+            if ((now - (mouseDownTimes.get(key) || 0)) <= 600) {
+                const callback = onMouseClickMap.get(button);
+                if (callback) callback(event, boardX, boardY);
+            }
         }
     }
 }
@@ -905,6 +918,7 @@ export function clear() {
     dragTarget = null;
     dragCandidate = null;
     dragButton = -1;
+    mouseOwner.clear();
     windowX = 0;
     windowY = 0;
 }
