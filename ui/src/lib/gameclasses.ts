@@ -309,7 +309,10 @@ export class GameObject {
 
     fadeInMillis : number = 0;
     growInMillis : number = 0;
+    /** @deprecated Misspelled — use fadeOutMillis instead */
     fateOutMillis : number = 0;
+    /** Fade-out duration in ms. Takes precedence over fateOutMillis. */
+    fadeOutMillis : number = 0;
     growOutMillis : number = 0;
 
     /**
@@ -863,8 +866,11 @@ export class GameObject {
             ctx.globalAlpha = Math.min(1, this.timeExistedMillis/this.fadeInMillis);
         }
         /* Fade out */
-        if(this.fateOutMillis > 0 && this.timeExistedMillis >= (this.maxDurationMillis - this.fateOutMillis)) {
-            ctx.globalAlpha = Math.max(0, Math.min(1, (this.maxDurationMillis - this.timeExistedMillis)/this.fateOutMillis));
+        {
+            const effectiveFadeOut = this.fadeOutMillis !== 0 ? this.fadeOutMillis : this.fateOutMillis;
+            if(effectiveFadeOut > 0 && this.timeExistedMillis >= (this.maxDurationMillis - effectiveFadeOut)) {
+                ctx.globalAlpha = Math.max(0, Math.min(1, (this.maxDurationMillis - this.timeExistedMillis)/effectiveFadeOut));
+            }
         }
         /* Opacity */
         if (this.opacity < 1) {

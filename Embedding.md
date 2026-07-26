@@ -674,6 +674,22 @@ background.zIndex = -10;   // behind everything
 ui_panel.zIndex = 100;     // on top of everything
 ```
 
+### Fade-in / Fade-out
+
+Any `GameObject` can fade in at spawn and fade out before auto-destruction.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `fadeInMillis` | `number` | `0` | Duration (ms) to fade from invisible to fully opaque at spawn. `0` = no fade-in. |
+| `fadeOutMillis` | `number` | `0` | Duration (ms) to fade out before `maxDurationMillis` expires. `0` = no fade-out. |
+
+```typescript
+const enemy = enemyClass.spawn(100, 100);
+enemy.fadeInMillis = 500;   // fades in over 500ms
+enemy.maxDurationMillis = 3000;
+enemy.fadeOutMillis = 400;  // fades out over 400ms before destruction
+```
+
 ---
 
 ## Debug Logging
