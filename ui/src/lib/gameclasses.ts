@@ -273,6 +273,9 @@ export class GameObject {
 
     standardMovement : boolean = true;
 
+    /** When true, movement methods (moveTo, circleAround) will not change the object's orientation. Default false. Useful for tools, projectiles with fixed sprite angle, etc. */
+    lockOrientation : boolean = false;
+
     /** Whether this object can be resized by parent layout containers */
     layoutCanResizeMe : boolean = true;
     /** Whether this object should be maximized in the x direction within its container */
@@ -486,7 +489,9 @@ export class GameObject {
         const dy = position.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         this.destination = position;
-        this.setOrientationTowards(position);
+        if (!this.lockOrientation) {
+            this.setOrientationTowards(position);
+        }
         this.velocity = distance / time;
     }
 
@@ -649,7 +654,9 @@ export class GameObject {
             }
 
             // Recalculate direction toward destination
-            this.setOrientationTowards(this.destination);
+            if (!this.lockOrientation) {
+                this.setOrientationTowards(this.destination);
+            }
 
             // Prevent overshoot — snap to destination if step exceeds remaining distance
             const stepDistance = this.velocity * delta_t;
@@ -801,7 +808,7 @@ export class GameObject {
         }
 
         const norm = Math.sqrt(dirX * dirX + dirY * dirY);
-        if (norm > 0.0001) {
+        if (norm > 0.0001 && !this.lockOrientation) {
             // setOrientationRadians expects 0 = up; atan2 gives 0 = right
             this.setOrientationRadians(Math.atan2(dirY, dirX) + Math.PI / 2);
         }
@@ -1073,7 +1080,9 @@ export class Player extends GameObject {
         const dy = position.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         this.destination = position;
-        this.setOrientationTowards(position);
+        if (!this.lockOrientation) {
+            this.setOrientationTowards(position);
+        }
         this.velocity = distance / time;
     }
 }

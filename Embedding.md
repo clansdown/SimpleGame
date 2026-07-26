@@ -196,7 +196,7 @@ This empties every game collection and resets the camera position.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
-| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), keyboard (`onKeyDown`/`onKeyUp`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
+| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), keyboard (`onKeyDown`/`onKeyUp`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `lockOrientation`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
 | `PlayerClass` / `Player` | class | Player-controllable object with keyboard input (`enableArrowKeysMovement`, `enableWasdKeysMovement`). Uses `speed` as max cap, `acceleration` as ramp time, and `x_speed`/`y_speed` for axis movement. Overrides `standardMovement = false`. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
@@ -653,6 +653,27 @@ enemy.onArrival(() => {
 The callback fires once when the object comes within 0.01 units of its
 destination. The object is snapped to the exact destination coordinates
 before the callback runs.
+
+### Locking orientation
+
+Set `lockOrientation = true` to prevent `moveTo` and `circleAround` from
+changing the object's orientation. The object still moves along the path but
+keeps its original facing direction unchanged. Useful for tools, thrown
+objects, or animated sprites with a fixed angle.
+
+```typescript
+const axe = itemClass.spawn(0, 0);
+axe.lockOrientation = true;
+axe.setOrientation(45);            // fixed 45° angle
+axe.moveTo({x: 500, y: 300}, 2.0); // moves but keeps 45° facing
+```
+
+The `lockOrientation` flag applies to all automatic orientation updates:
+- `moveTo()` initial and per-frame re-orientation
+- `circleAround()` orbit-facing orientation
+
+For `Projectile`, use `alignToTravel = false` instead (it has its own
+orientation system separate from `lockOrientation`).
 
 ### moveTo vs setOrientationTowards
 
