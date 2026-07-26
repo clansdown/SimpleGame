@@ -412,6 +412,11 @@ function allClassesLoaded() : boolean {
         if(!gameclass.loaded) {
             return false;
         }
+        for (const sprite of gameclass.damageSprites) {
+            if (!sprite.loaded) {
+                return false;
+            }
+        }
     }
     return true;
 }

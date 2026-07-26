@@ -195,7 +195,7 @@ This empties every game collection and resets the camera position.
 
 | Export | Kind | Description |
 |---|---|---|
-| `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
+| `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `addDamageSprite()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
 | `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), keyboard (`onKeyDown`/`onKeyUp`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `lockOrientation`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
 | `PlayerClass` / `Player` | class | Player-controllable object with keyboard input (`enableArrowKeysMovement`, `enableWasdKeysMovement`). Uses `speed` as max cap, `acceleration` as ramp time, and `x_speed`/`y_speed` for axis movement. Overrides `standardMovement = false`. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
@@ -616,6 +616,52 @@ everyTick(() => {
     enemy.setOrientationTowards(getMousePosition());
 });
 ```
+
+---
+
+## Damage Sprites
+
+Swap the drawn sprite based on the object's current HP to show visual
+damage stages. Add sprites to the class with an HP threshold and the
+engine automatically picks the right one each frame.
+
+```typescript
+const goblin = new EnemyClass("goblin", "goblin.png", 100);
+goblin.addDamageSprite(100, "goblin_full.png");    // HP 76–100
+goblin.addDamageSprite(50,  "goblin_damaged.png"); // HP 36–50
+goblin.addDamageSprite(20,  "goblin_crit.png");    // HP 1–20
+```
+
+### How selection works
+
+Sprites are sorted by `hpThreshold` ascending. The engine clamps the current
+HP to `defaultHitpoints` (so a boost over max HP goes to the full-cover sprite).
+It then picks the sprite with the **smallest threshold that is ≥ the clamped
+HP**.
+
+| HP | Clamped HP | Matching sprite |
+|----|------------|----------------|
+| 80 | 80 | Full (threshold 100, the smallest ≥ 80) |
+| 35 | 35 | Damaged (threshold 50, the smallest ≥ 35) |
+| 10 | 10 | Crit (threshold 20, the smallest ≥ 10) |
+| 150 | min(150,100)=100 | Full |
+| 0 | 0 | Crit |
+
+If no sprite matches (HP is above all thresholds, or no sprites are defined),
+the base image from the constructor is used.
+
+### Loading
+
+Damage sprite images are loaded asynchronously. The engine waits for all class
+images and all damage sprite images to finish loading before starting the game
+loop.
+
+### API reference
+
+| Member | Description |
+|--------|-------------|
+| `addDamageSprite(hpThreshold, imageFile)` | Add a damage sprite to the class. Sprites are automatically sorted ascending by `hpThreshold`. |
+| `damageSprites` | The sorted array of `{hpThreshold, image, loaded}` objects. |
 
 ---
 

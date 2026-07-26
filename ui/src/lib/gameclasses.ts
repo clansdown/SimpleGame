@@ -61,6 +61,18 @@ export interface CircleAroundOptions {
     onComplete?: () => void;
 }
 
+/**
+ * A damage sprite: an alternate image to show when the object's HP drops
+ * below a threshold. Sprites are sorted by hpThreshold ascending; the
+ * engine draws the sprite with the smallest threshold that is >= the
+ * current HP (clamped to defaultHitpoints).
+ */
+export type DamageSpriteDef = {
+    hpThreshold: number;
+    image: HTMLImageElement;
+    loaded: boolean;
+};
+
 export const gameClasses : GameObjectClass[] = [];
 
 export class GameObjectClass {
@@ -79,6 +91,9 @@ export class GameObjectClass {
     defaultSpriteForwardVector: vec2 = [0, -1];
     /** Default value for singleCollisionOnly on spawned instances */
     defaultSingleCollisionOnly: boolean = false;
+
+    /** Damage sprites: alternate images shown at low HP. Sorted by hpThreshold ascending. */
+    damageSprites: DamageSpriteDef[] = [];
 
     parent : GameObjectClass|null;
     children : Set<GameObjectClass> = new Set();
@@ -151,6 +166,46 @@ export class GameObjectClass {
         this.hitboxHeight = height;
         this.hitboxXOffset = x_offset;
         this.hitboxYOffset = y_offset;
+    }
+
+    /**
+     * Adds a damage sprite to be shown when the object's HP drops below a threshold.
+     * Sprites are checked in hpThreshold order (ascending); the sprite with the
+     * smallest threshold that is >= the current HP is drawn.
+     *
+     * @param hpThreshold - Upper bound HP for this sprite. Shown when HP <= this value
+     *   and HP is not also <= a lower threshold.
+     * @param imageFile - URL of the damage sprite image
+     * @example
+     *   enemyClass.addDamageSprite(60, "enemy_damaged.png");
+     *   enemyClass.addDamageSprite(20, "enemy_crit.png");
+     */
+    addDamageSprite(hpThreshold: number, imageFile: string): void {
+        const img = new Image();
+        const def: DamageSpriteDef = { hpThreshold, image: img, loaded: false };
+        img.onload = () => { def.loaded = true; };
+        img.onerror = () => { def.loaded = true; };
+        img.src = imageFile;
+        this.damageSprites.push(def);
+        this.damageSprites.sort((a, b) => a.hpThreshold - b.hpThreshold);
+    }
+
+    /**
+     * Returns the damage sprite image for a given HP value, or null if no
+     * sprite matches (the base image should be used instead). HP is clamped
+     * to defaultHitpoints so boosts over max HP don't skip the full-cover sprite.
+     *
+     * @param hp - The object's current hitpoints
+     * @returns The matching damage sprite image, or null
+     */
+    getDamageSpriteImage(hp: number): HTMLImageElement | null {
+        const effectiveHp = Math.min(hp, this.defaultHitpoints);
+        for (const sprite of this.damageSprites) {
+            if (effectiveHp <= sprite.hpThreshold) {
+                return sprite.image;
+            }
+        }
+        return null;
     }
 
     spawn(x: number, y: number) {
@@ -489,8 +544,12 @@ export class GameObject {
         const dy = position.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         this.destination = position;
-        if (!this.lockOrientation) {
-            this.setOrientationTowards(position);
+        if (distance > 0.001) {
+            this.direction_x = dx / distance;
+            this.direction_y = dy / distance;
+            if (!this.lockOrientation) {
+                this.orientation = Math.atan2(dy, dx) + Math.PI / 2;
+            }
         }
         this.velocity = distance / time;
     }
@@ -654,8 +713,10 @@ export class GameObject {
             }
 
             // Recalculate direction toward destination
+            this.direction_x = dx / distance;
+            this.direction_y = dy / distance;
             if (!this.lockOrientation) {
-                this.setOrientationTowards(this.destination);
+                this.orientation = Math.atan2(dy, dx) + Math.PI / 2;
             }
 
             // Prevent overshoot — snap to destination if step exceeds remaining distance
@@ -896,10 +957,11 @@ export class GameObject {
             ctx.globalAlpha *= this.opacity;
         }
         /* Scale */
+        const effectiveImage = this.gameclass.getDamageSpriteImage(this.hitpoints) ?? this.gameclass.image;
         if(this.width > 0 && this.height > 0)
-            ctx.scale(this.width/this.gameclass.image.width, this.height/this.gameclass.image.height);
+            ctx.scale(this.width/effectiveImage.width, this.height/effectiveImage.height);
 
-        ctx.drawImage(this.gameclass.image, -this.gameclass.image.width / 2, -this.gameclass.image.height / 2);
+        ctx.drawImage(effectiveImage, -effectiveImage.width / 2, -effectiveImage.height / 2);
         ctx.restore();
     }
 
@@ -1080,8 +1142,12 @@ export class Player extends GameObject {
         const dy = position.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         this.destination = position;
-        if (!this.lockOrientation) {
-            this.setOrientationTowards(position);
+        if (distance > 0.001) {
+            this.direction_x = dx / distance;
+            this.direction_y = dy / distance;
+            if (!this.lockOrientation) {
+                this.orientation = Math.atan2(dy, dx) + Math.PI / 2;
+            }
         }
         this.velocity = distance / time;
     }
