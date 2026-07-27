@@ -195,6 +195,7 @@ removes game objects and resets the camera.
 | `onButtonDown(btn, fn)` | function | ⚠️ Not yet implemented — no-op stub. |
 | `onButtonUp(btn, fn)` | function | ⚠️ Not yet implemented — no-op stub. |
 | `afterDraw(fn)` | function | Registers a callback that runs after all game objects are drawn each frame. Receives `(ctx, offsetX, offsetY)`. Useful for overlays. |
+| `clearAfterDraw()` | function | Clear all registered `afterDraw` callbacks. |
 | `setButtonDebugLevel(level)` | function | Enable `[ButtonDebug]` logs. `0`=off, `1`=events, `10`=per-object geometry. |
 | `collisionActions` | `CollisionAction[]` | Active collision action registry. Read by the engine each frame. |
 | `CollisionAction` | class | `{ sourceGameClass, sourceGameObject, targetGameClass, targetGameObject, work }` — internal collision action record. |

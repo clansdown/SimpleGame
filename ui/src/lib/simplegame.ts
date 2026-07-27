@@ -753,6 +753,19 @@ export function afterDraw(callback: (ctx: CanvasRenderingContext2D, offsetX: num
     afterDrawWork.push(callback);
 }
 
+/**
+ * Clears all registered {@link afterDraw} callbacks. Use this before
+ * registering new afterDraw work so you don't need to track old
+ * callback references.
+ *
+ * @example
+ *   clearAfterDraw();
+ *   afterDraw((ctx, ox, oy) => { drawHud(ctx); });
+ */
+export function clearAfterDraw(): void {
+    afterDrawWork.length = 0;
+}
+
 function doCollisionDetection() : CollisionDetector{
     const detector = new CollisionDetector(boardWidth, boardHeight);
     const alreadyCollided = new Set<GameObject>();
