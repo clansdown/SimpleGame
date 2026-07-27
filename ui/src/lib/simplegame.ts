@@ -927,3 +927,75 @@ export function clear() {
     windowX = 0;
     windowY = 0;
 }
+
+/**
+ * Completely shuts down the game engine: stops the game loop, unbinds
+ * all DOM event listeners, clears all game objects, callbacks, input
+ * state, and engine flags. Releases every resource the engine holds.
+ *
+ * After calling this, the engine must be re-initialised with
+ * {@link initEngine} before it can be used again.
+ *
+ * Use {@link clear} instead when you only want to reset game objects
+ * for a level restart without tearing down the engine infrastructure.
+ *
+ * @example
+ *   // Svelte onDestroy
+ *   onDestroy(() => { destroyEngine(); });
+ *
+ *   // React useEffect cleanup
+ *   useEffect(() => {
+ *       initEngine(canvas, debugDiv);
+ *       return () => { destroyEngine(); };
+ *   }, []);
+ */
+export function destroyEngine(): void {
+    // Stop the game loop
+    if (gameLoopTimeout >= 0) {
+        clearTimeout(gameLoopTimeout);
+        gameLoopTimeout = -1;
+    }
+
+    // Remove DOM event listeners from the canvas
+    if (canvas) {
+        removeEventListeners();
+    }
+
+    // Clear game objects, drag state, mouseOwner, camera position
+    clear();
+
+    // Clear callback registries
+    tickWork.length = 0;
+    periodicWork.length = 0;
+    onLoadedWork.length = 0;
+    onPauseWork.length = 0;
+    onResumeWork.length = 0;
+    afterDrawWork.length = 0;
+    onKeyDownMap.clear();
+    onKeyUpMap.clear();
+    onMouseClickMap.clear();
+
+    // Clear input state
+    keyMap.clear();
+    keyMapTimes.clear();
+    keyEvents.length = 0;
+    mouseDownTimes.clear();
+    mousePosition = { x: 0, y: 0 };
+
+    // Clear game classes (images get GC'd when user's refs are dropped)
+    gameClasses.length = 0;
+
+    // Clear background
+    backgroundTileset = [];
+
+    // Reset engine flags
+    notAllClassesAreLoaded = true;
+    stillNeedInitialMouseClick = true;
+
+    // Reset camera/board/window to defaults
+    boardWidth = 10000;
+    boardHeight = 10000;
+    cameraFollowsPlayer = true;
+    maxCameraMovementPerSecond = 100;
+    backgroundMode = "tile";
+}

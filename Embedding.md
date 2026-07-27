@@ -137,17 +137,30 @@ setCanvas(newCanvas);
 
 ---
 
-## Cleanup
+## Destroying the Engine
 
-To reset the engine entirely (all objects, players, enemies, etc.):
+To completely tear down an embedded SimpleGame instance — stopping the game
+loop, removing all DOM event listeners, clearing callbacks, and releasing all
+game state — call `destroyEngine()`. After this call the engine is inert; you
+must call `initEngine()` again to restart.
 
 ```typescript
-import { clear } from "./lib/simplegame";
+import { initEngine, destroyEngine } from "./lib/simplegame";
 
-clear();
+// Svelte: call in onDestroy
+// onDestroy(() => { destroyEngine(); });
+
+// React: call in useEffect cleanup
+// useEffect(() => {
+//     initEngine(canvas, debugDiv);
+//     return () => { destroyEngine(); };
+// }, []);
 ```
 
-This empties every game collection and resets the camera position.
+For resetting game state without tearing down the engine (e.g. restarting a
+level), use `clear()` instead. `clear()` keeps the game loop running,
+preserves registered callbacks, and keeps event listeners intact — it only
+removes game objects and resets the camera.
 
 ---
 
@@ -166,7 +179,8 @@ This empties every game collection and resets the camera position.
 | `setCameraFollowsPlayer(follows)` | function | Toggle camera tracking. |
 | `setBackground(tiles, whenLoaded?)` | function | Set background from image URLs. |
 | `setBackgroundMode(mode)` | function | `"tile"` (default, scrolls with camera) or `"stretch"` (fills viewport, no scroll). |
-| `clear()` | function | Remove all game objects and reset state. |
+| `clear()` | function | Remove all game objects and reset camera. Use for level restart. Keeps engine running. |
+| `destroyEngine()` | function | Full teardown. Stops loop, removes listeners, clears callbacks, game state. Engine must be re-initialised with `initEngine()` afterwards. |
 | `debug(text)` | function | Write to the debug div. |
 | `getMousePosition()` | function | Get current mouse coordinates on the board. |
 | `everyTick(fn)` | function | Register a per-frame callback. |
