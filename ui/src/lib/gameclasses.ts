@@ -289,11 +289,9 @@ export class GameObject {
     /** The y component of the orientation, to make movement computation more efficient */
     direction_y : number = -1;
 
-    /** When true, mirrors the sprite horizontally when movement direction is > 90° from spriteForwardVector. Useful for side-view games. */
-    mirrorOnDirection: boolean = false;
     /** The direction the raw sprite image faces. Inherited from class defaultSpriteForwardVector at spawn. [0, -1] = up, [1, 0] = right, etc. */
     spriteForwardVector: vec2 = [0, -1];
-    /** The "up" direction of this instance's sprite image. Used by mirrorOnDirection to compute the correct horizontal-mirror axis. Copied from class defaultSpriteUpVector at spawn. */
+    /** The "up" direction of this instance's sprite image. Together with spriteForwardVector this forms a local frame that the engine maps to the world-space facing and screen up on every draw. Copied from class defaultSpriteUpVector at spawn. */
     spriteUpVector: vec2 = [-1, 0];
     /** If true, stops collision detection for this object after the first hit per frame. Inherited from class defaultSingleCollisionOnly. */
     singleCollisionOnly: boolean = false;
@@ -919,34 +917,36 @@ export class GameObject {
         /* Align sprite forward vector with facing direction */
         {
             const fwd = this.spriteForwardVector;
-            const facingX = Math.sin(this.orientation);
-            const facingY = -Math.cos(this.orientation);
+            const up = this.spriteUpVector;
+            const sx = Math.sin(this.orientation);
+            const sy = -Math.cos(this.orientation);
 
-            const rawAngle = Math.atan2(
-                fwd[0] * facingY - fwd[1] * facingX,
-                fwd[0] * facingX + fwd[1] * facingY
-            );
-
-            if (this.mirrorOnDirection) {
-                // Rotate the sprite's up vector by rawAngle to see where the
-                // character's head ends up on screen. Mirror if it falls in
-                // the right or lower half-plane.
-                const up = this.spriteUpVector;
-                const upRotatedX = up[0] * Math.cos(rawAngle) - up[1] * Math.sin(rawAngle);
-                const upRotatedY = up[0] * Math.sin(rawAngle) + up[1] * Math.cos(rawAngle);
-
-                if (upRotatedX > 0.001 || upRotatedY > 0.001) {
-                    ctx.scale(-1, 1);
-                    const mirrorAngle = -Math.atan2(
-                        -fwd[0] * facingY - fwd[1] * facingX,
-                        -fwd[0] * facingX + fwd[1] * facingY
-                    );
-                    ctx.rotate(mirrorAngle);
-                } else {
-                    ctx.rotate(rawAngle);
-                }
-            } else {
+            const det = fwd[0] * up[1] - fwd[1] * up[0];
+            if (Math.abs(det) < 0.001) {
+                // The sprite's forward and up are (nearly) parallel — the
+                // orientation system is degenerate.  Fall back to a simple
+                // rotation so the sprite at least faces the right direction.
+                const rawAngle = Math.atan2(
+                    fwd[0] * sy - fwd[1] * sx,
+                    fwd[0] * sx + fwd[1] * sy
+                );
                 ctx.rotate(rawAngle);
+            } else {
+                // M is the 2×2 matrix that maps the sprite's forward vector
+                // to the facing direction and the sprite's up vector to
+                // (0, −1) on screen (head stays at top).
+                //
+                //   M · fwd  = (sx, sy)   (= facing direction)
+                //   M · up   = (0,  −1)   (= screen up)
+                //
+                // Solved via Cramer's rule.
+                ctx.transform(
+                    sx * up[1] / det,
+                    (sy * up[1] + fwd[1]) / det,
+                    -up[0] * sx / det,
+                    (-fwd[0] - up[0] * sy) / det,
+                    0, 0
+                );
             }
         }
 

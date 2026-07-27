@@ -592,31 +592,30 @@ set to zero so the engine's movement system doesn't interfere.
 
 ## Sprite Alignment
 
-The engine automatically aligns the sprite image so its `spriteForwardVector`
-points in the object's facing direction. For side-view games, set
-`defaultSpriteForwardVector` on the class and enable `mirrorOnDirection` so
-the sprite flips instead of rotating past 90°.
-
-The mirror check uses `spriteUpVector` — a second axis that tells the engine
-which side of the sprite image is the character's "head" (or top). The default
-is `[-1, 0]` (left), which works for sprites where the forward is the top of
-the image. The engine rotates this vector by the computed angle and mirrors
-horizontally if the head ends up in the right or lower half of the screen.
-
-If the default `[-1, 0]` doesn't match your art — for example a horizontal
-sprite where the character's right side is the head — set `spriteUpVector`
-explicitly:
+The engine solves a linear system to map the sprite's local frame
+(`spriteForwardVector` + `spriteUpVector`) to the world-space facing
+direction and screen up (`0, −1`) on every frame.  This handles rotation,
+horizontal mirroring, and any combination automatically — the matrix IS
+the correct orientation for any pair of forward and up vectors.
 
 ```typescript
 // On the class (all instances inherit):
 const ratClass = new EnemyClass("dire_rat", "rat.png");
 ratClass.defaultSpriteForwardVector = [1, 0];   // sprite faces right
-ratClass.defaultSpriteUpVector = [0, -1];       // top of image = head
+ratClass.defaultSpriteUpVector      = [0, -1];  // top of image = head
 
-// On the instance:
+// On the instance (override per-object):
 const rat = ratClass.spawn(100, 100);
-rat.mirrorOnDirection = true;                    // flip when head would be upside-down
+rat.spriteForwardVector = [-1, 0];  // this one faces left
 ```
+
+No `mirrorOnDirection` flag — the engine uses both vectors together to
+compute a 2×2 transformation matrix.  Flip/mirror is just a natural
+by-product when it preserves the head-at-top constraint.
+
+When the forward and up vectors are (nearly) parallel — i.e. the sprite
+faces the exact direction its forward already points — the system is
+degenerate and the engine falls back to a simple rotation.
 
 ### API reference
 
@@ -624,9 +623,8 @@ rat.mirrorOnDirection = true;                    // flip when head would be upsi
 |---|---|---|---|---|
 | `defaultSpriteForwardVector` | `vec2` | `[0, -1]` | `GameObjectClass` | The direction the raw sprite image faces. Set once after constructing the class. |
 | `spriteForwardVector` | `vec2` | inherited from class | `GameObject` | Per-instance override (rarely needed). |
-| `defaultSpriteUpVector` | `vec2` | `[-1, 0]` | `GameObjectClass` | The "up" (head) direction of the raw sprite image. Used by `mirrorOnDirection` to pick the correct mirror axis. |
+| `defaultSpriteUpVector` | `vec2` | `[-1, 0]` | `GameObjectClass` | The "up" (head) direction of the raw sprite image. Together with forward this defines the sprite's local frame. |
 | `spriteUpVector` | `vec2` | inherited from class | `GameObject` | Per-instance override of the sprite's head direction. |
-| `mirrorOnDirection` | `boolean` | `false` | `GameObject` | Enable horizontal mirroring when the sprite's head would end up below or to the right of the center. |
 
 ### Orientation helpers
 
