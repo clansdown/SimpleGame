@@ -866,7 +866,7 @@ export class GameObject {
         if (state.customWorldUp) {
             this.worldUpVector[0] = state.customWorldUp[0];
             this.worldUpVector[1] = state.customWorldUp[1];
-        } else {
+        } else if (state.radius > 0.001) {
             // Default: radially outward from the centre (centrifugal)
             this.worldUpVector[0] = offsetX / state.radius;
             this.worldUpVector[1] = offsetY / state.radius;
@@ -944,10 +944,12 @@ export class GameObject {
             const sy = -Math.cos(this.orientation);
 
             const det = fwd[0] * up[1] - fwd[1] * up[0];
-            if (Math.abs(det) < 0.001) {
-                // The sprite's forward and up are (nearly) parallel — the
-                // orientation system is degenerate.  Fall back to a simple
-                // rotation so the sprite at least faces the right direction.
+            const worldUpInvalid = isNaN(wx) || isNaN(wy) || (wx === 0 && wy === 0);
+
+            if (Math.abs(det) < 0.001 || worldUpInvalid) {
+                // Degenerate sprite frame or invalid world-up — fall back
+                // to a simple rotation so the sprite at least faces the
+                // right direction.
                 const rawAngle = Math.atan2(
                     fwd[0] * sy - fwd[1] * sx,
                     fwd[0] * sx + fwd[1] * sy
