@@ -89,6 +89,8 @@ export class GameObjectClass {
     defaultHitpoints : number = 1;
     /** The direction the raw sprite image faces. [0, -1] = up, [1, 0] = right, etc. Inherited by all spawned instances. */
     defaultSpriteForwardVector: vec2 = [0, -1];
+    /** The "up" direction of the raw sprite image perpendicular to the forward vector. Used by the mirror-on-direction system to compute the correct mirroring axis. Defaults to perp_cw(forwardVector) = [-1, 0] for [0, -1] (left = up in screen space). */
+    defaultSpriteUpVector: vec2 = [-1, 0];
     /** Default value for singleCollisionOnly on spawned instances */
     defaultSingleCollisionOnly: boolean = false;
 
@@ -291,6 +293,8 @@ export class GameObject {
     mirrorOnDirection: boolean = false;
     /** The direction the raw sprite image faces. Inherited from class defaultSpriteForwardVector at spawn. [0, -1] = up, [1, 0] = right, etc. */
     spriteForwardVector: vec2 = [0, -1];
+    /** The "up" direction of this instance's sprite image. Used by mirrorOnDirection to compute the correct horizontal-mirror axis. Copied from class defaultSpriteUpVector at spawn. */
+    spriteUpVector: vec2 = [-1, 0];
     /** If true, stops collision detection for this object after the first hit per frame. Inherited from class defaultSingleCollisionOnly. */
     singleCollisionOnly: boolean = false;
 
@@ -408,6 +412,7 @@ export class GameObject {
 
         this.speed = gameclass.defaultSpeed;
         this.spriteForwardVector = [...gameclass.defaultSpriteForwardVector];
+        this.spriteUpVector = [...gameclass.defaultSpriteUpVector];
         this.singleCollisionOnly = gameclass.defaultSingleCollisionOnly;
     }
 
@@ -922,13 +927,24 @@ export class GameObject {
                 fwd[0] * facingX + fwd[1] * facingY
             );
 
-            if (this.mirrorOnDirection && Math.abs(rawAngle) > Math.PI / 2) {
-                ctx.scale(-1, 1);
-                const mirrorAngle = -Math.atan2(
-                    -fwd[0] * facingY - fwd[1] * facingX,
-                    -fwd[0] * facingX + fwd[1] * facingY
-                );
-                ctx.rotate(mirrorAngle);
+            if (this.mirrorOnDirection) {
+                // Rotate the sprite's up vector by rawAngle to see where the
+                // character's head ends up on screen. Mirror if it falls in
+                // the right or lower half-plane.
+                const up = this.spriteUpVector;
+                const upRotatedX = up[0] * Math.cos(rawAngle) - up[1] * Math.sin(rawAngle);
+                const upRotatedY = up[0] * Math.sin(rawAngle) + up[1] * Math.cos(rawAngle);
+
+                if (upRotatedX > 0.001 || upRotatedY > 0.001) {
+                    ctx.scale(-1, 1);
+                    const mirrorAngle = -Math.atan2(
+                        -fwd[0] * facingY - fwd[1] * facingX,
+                        -fwd[0] * facingX + fwd[1] * facingY
+                    );
+                    ctx.rotate(mirrorAngle);
+                } else {
+                    ctx.rotate(rawAngle);
+                }
             } else {
                 ctx.rotate(rawAngle);
             }

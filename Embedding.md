@@ -592,19 +592,31 @@ set to zero so the engine's movement system doesn't interfere.
 
 ## Sprite Alignment
 
-The engine automatically aligns the sprite image so its `spriteForwardVector` points in the object's facing direction (`direction_x`, `direction_y`). For side-view games, set `defaultSpriteForwardVector` on the class and enable `mirrorOnDirection` so the sprite flips instead of rotating past 90°.
+The engine automatically aligns the sprite image so its `spriteForwardVector`
+points in the object's facing direction. For side-view games, set
+`defaultSpriteForwardVector` on the class and enable `mirrorOnDirection` so
+the sprite flips instead of rotating past 90°.
+
+The mirror check uses `spriteUpVector` — a second axis that tells the engine
+which side of the sprite image is the character's "head" (or top). The default
+is `[-1, 0]` (left), which works for sprites where the forward is the top of
+the image. The engine rotates this vector by the computed angle and mirrors
+horizontally if the head ends up in the right or lower half of the screen.
+
+If the default `[-1, 0]` doesn't match your art — for example a horizontal
+sprite where the character's right side is the head — set `spriteUpVector`
+explicitly:
 
 ```typescript
 // On the class (all instances inherit):
 const ratClass = new EnemyClass("dire_rat", "rat.png");
-ratClass.defaultSpriteForwardVector = [1, 0];  // sprite faces right
+ratClass.defaultSpriteForwardVector = [1, 0];   // sprite faces right
+ratClass.defaultSpriteUpVector = [0, -1];       // top of image = head
 
 // On the instance:
 const rat = ratClass.spawn(100, 100);
-rat.mirrorOnDirection = true;                   // flip when moving left
+rat.mirrorOnDirection = true;                    // flip when head would be upside-down
 ```
-
-The transform is: compute the signed angle from `spriteForwardVector` to the facing direction. If the angle exceeds ±90° and `mirrorOnDirection` is true, mirror the sprite horizontally and rotate by the residual. Otherwise rotate by the full angle.
 
 ### API reference
 
@@ -612,7 +624,9 @@ The transform is: compute the signed angle from `spriteForwardVector` to the fac
 |---|---|---|---|---|
 | `defaultSpriteForwardVector` | `vec2` | `[0, -1]` | `GameObjectClass` | The direction the raw sprite image faces. Set once after constructing the class. |
 | `spriteForwardVector` | `vec2` | inherited from class | `GameObject` | Per-instance override (rarely needed). |
-| `mirrorOnDirection` | `boolean` | `false` | `GameObject` | Enable mirror when the required rotation > 90°. |
+| `defaultSpriteUpVector` | `vec2` | `[-1, 0]` | `GameObjectClass` | The "up" (head) direction of the raw sprite image. Used by `mirrorOnDirection` to pick the correct mirror axis. |
+| `spriteUpVector` | `vec2` | inherited from class | `GameObject` | Per-instance override of the sprite's head direction. |
+| `mirrorOnDirection` | `boolean` | `false` | `GameObject` | Enable horizontal mirroring when the sprite's head would end up below or to the right of the center. |
 
 ### Orientation helpers
 
