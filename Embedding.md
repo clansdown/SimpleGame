@@ -211,7 +211,7 @@ removes game objects and resets the camera.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `addDamageSprite()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
-| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), keyboard (`onKeyDown`/`onKeyUp`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `lockOrientation`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
+| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), keyboard (`onKeyDown`/`onKeyUp`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `lockOrientation`, `worldUpVector`, `spriteForwardVector`, `spriteUpVector`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
 | `PlayerClass` / `Player` | class | Player-controllable object with keyboard input (`enableArrowKeysMovement`, `enableWasdKeysMovement`). Uses `speed` as max cap, `acceleration` as ramp time, and `x_speed`/`y_speed` for axis movement. Overrides `standardMovement = false`. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
@@ -594,9 +594,9 @@ set to zero so the engine's movement system doesn't interfere.
 
 The engine solves a linear system to map the sprite's local frame
 (`spriteForwardVector` + `spriteUpVector`) to the world-space facing
-direction and screen up (`0, −1`) on every frame.  This handles rotation,
-horizontal mirroring, and any combination automatically — the matrix IS
-the correct orientation for any pair of forward and up vectors.
+direction and the object's `worldUpVector` on every frame.  This handles
+rotation, horizontal mirroring, and any combination automatically — the
+matrix IS the correct orientation for any pair of forward and up vectors.
 
 ```typescript
 // On the class (all instances inherit):
@@ -607,11 +607,13 @@ ratClass.defaultSpriteUpVector      = [0, -1];  // top of image = head
 // On the instance (override per-object):
 const rat = ratClass.spawn(100, 100);
 rat.spriteForwardVector = [-1, 0];  // this one faces left
+rat.worldUpVector        = [0, 1];  // ceiling walk
 ```
 
-No `mirrorOnDirection` flag — the engine uses both vectors together to
-compute a 2×2 transformation matrix.  Flip/mirror is just a natural
-by-product when it preserves the head-at-top constraint.
+The `worldUpVector` is set automatically by `moveTo` and `circleAround`
+(default screen-up `[0, −1]`, or radially-outward for orbits).  You can
+pass a custom `up` vector to either call for ceiling-walking, wall-
+clinging, or inward-facing orbits.
 
 When the forward and up vectors are (nearly) parallel — i.e. the sprite
 faces the exact direction its forward already points — the system is
@@ -625,6 +627,7 @@ degenerate and the engine falls back to a simple rotation.
 | `spriteForwardVector` | `vec2` | inherited from class | `GameObject` | Per-instance override (rarely needed). |
 | `defaultSpriteUpVector` | `vec2` | `[-1, 0]` | `GameObjectClass` | The "up" (head) direction of the raw sprite image. Together with forward this defines the sprite's local frame. |
 | `spriteUpVector` | `vec2` | inherited from class | `GameObject` | Per-instance override of the sprite's head direction. |
+| `worldUpVector` | `vec2` | `[0, -1]` | `GameObject` | Where the character's head should point in world space. Set automatically by movement functions; override for ceiling-walking etc. |
 
 ### Orientation helpers
 
@@ -703,6 +706,26 @@ enemy.moveTo({x: 1000, y: 500}, 3.0);
 
 The object's orientation is automatically set to face the destination.
 Velocity is calculated to arrive on schedule.
+
+### World up direction
+
+The third (optional) parameter `up` sets `worldUpVector` — which direction the
+character's head should point in world space. Default is `[0, -1]` (screen up).
+
+```typescript
+// Ceiling walk: character moves right with head pointing down
+player.moveTo({x: 500, y: 0}, 2.0, [0, 1]);
+```
+
+For `circleAround`, the default up is radially outward from the orbit centre
+(centrifugal). Pass `worldUp` in the options to override:
+
+```typescript
+drone.circleAround({
+    center: player, radius: 80, velocity: 40,
+    worldUp: [0, -1],   // head stays at screen top regardless of orbit position
+});
+```
 
 ### Deceleration
 
@@ -1167,6 +1190,7 @@ at its current position. Calling `moveTo()` also cancels the orbit
 | `arcRad` | `number` | — | Total arc to sweep in radians. Omit for indefinite orbit. Direction (`+`/`-`) is ignored — use `direction` instead. |
 | `arcDeg` | `number` | — | Total arc to sweep in degrees. Takes precedence over `arcRad`. Omit for indefinite orbit. |
 | `direction` | `number` | `1` | Swing direction: `1` = clockwise (default), `-1` = counter-clockwise. |
+| `worldUp` | `vec2` | `—` | World-space up direction for the orbiting object. Default: radially outward from centre (centrifugal). Pass `[0, -1]` for screen-up always, or a custom vector for wall/ceiling orbits. |
 | `onComplete` | `() => void` | — | Called once after the arc is fully traversed. The object is snapped to the exact final position before the callback fires. |
 
 ### Methods

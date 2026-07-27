@@ -58,6 +58,7 @@ export interface CircleAroundOptions {
     arcRad?: number;
     arcDeg?: number;
     direction?: number;
+    worldUp?: vec2;
     onComplete?: () => void;
 }
 
@@ -293,6 +294,8 @@ export class GameObject {
     spriteForwardVector: vec2 = [0, -1];
     /** The "up" direction of this instance's sprite image. Together with spriteForwardVector this forms a local frame that the engine maps to the world-space facing and screen up on every draw. Copied from class defaultSpriteUpVector at spawn. */
     spriteUpVector: vec2 = [-1, 0];
+    /** The world-space "up" direction for this object.  Movement functions set this to tell the draw() matrix where the character's head should point on screen.  Default [0, -1] = screen-up.  Override for ceiling-walking ([0, 1]), wall-clinging, etc. */
+    worldUpVector: vec2 = [0, -1];
     /** If true, stops collision detection for this object after the first hit per frame. Inherited from class defaultSingleCollisionOnly. */
     singleCollisionOnly: boolean = false;
 
@@ -321,6 +324,7 @@ export class GameObject {
         fadeOutTime: number;
         arcRad: number | null;
         completedArcRad: number;
+        customWorldUp: vec2 | null;
         onComplete: (() => void) | null;
     } | null = null;
 
@@ -541,10 +545,15 @@ export class GameObject {
      *
      * @param position - The target position to move to
      * @param time - The time in seconds to complete the movement
+     * @param up - Optional world-space up direction for the object during this
+     *   movement.  Overrides {@link worldUpVector} (default [0, -1] = screen up).
+     *   Use [0, 1] for ceiling-walking, [1, 0] for wall-clinging on a right wall, etc.
      * @example
      *   enemy.moveTo({x: 1000, y: 500}, 3.0); // Moves to position over 3 seconds
+     *   player.moveTo({x: 500, y: 0}, 2.0, [0, 1]); // Ceiling walk
      */
-    moveTo(position: Position2D, time: number) {
+    moveTo(position: Position2D, time: number, up?: vec2) {
+        if (up) this.worldUpVector = [up[0], up[1]];
         this.circleState = null;
         const dx = position.x - this.x;
         const dy = position.y - this.y;
@@ -633,6 +642,7 @@ export class GameObject {
             fadeOutTime: options.fadeOutTime ?? 0,
             arcRad: arcRad,
             completedArcRad: 0,
+            customWorldUp: options.worldUp ? [options.worldUp[0], options.worldUp[1]] : null,
             onComplete: options.onComplete ?? null,
         };
     }
@@ -852,6 +862,16 @@ export class GameObject {
 
         this.setLocation(centerX + offsetX, centerY + offsetY);
 
+        // --- Set world up direction ---
+        if (state.customWorldUp) {
+            this.worldUpVector[0] = state.customWorldUp[0];
+            this.worldUpVector[1] = state.customWorldUp[1];
+        } else {
+            // Default: radially outward from the centre (centrifugal)
+            this.worldUpVector[0] = offsetX / state.radius;
+            this.worldUpVector[1] = offsetY / state.radius;
+        }
+
         // --- Compute facing direction ---
         // In the centre's local frame at angle θ:
         //   radial outward = (cosθ, sinθ)
@@ -918,6 +938,8 @@ export class GameObject {
         {
             const fwd = this.spriteForwardVector;
             const up = this.spriteUpVector;
+            const wx = this.worldUpVector[0];
+            const wy = this.worldUpVector[1];
             const sx = Math.sin(this.orientation);
             const sy = -Math.cos(this.orientation);
 
@@ -933,18 +955,18 @@ export class GameObject {
                 ctx.rotate(rawAngle);
             } else {
                 // M is the 2×2 matrix that maps the sprite's forward vector
-                // to the facing direction and the sprite's up vector to
-                // (0, −1) on screen (head stays at top).
+                // to the facing direction and the sprite's up vector to the
+                // object's worldUpVector.
                 //
                 //   M · fwd  = (sx, sy)   (= facing direction)
-                //   M · up   = (0,  −1)   (= screen up)
+                //   M · up   = (wx, wy)   (= worldUpVector)
                 //
                 // Solved via Cramer's rule.
                 ctx.transform(
-                    sx * up[1] / det,
-                    (sy * up[1] + fwd[1]) / det,
-                    -up[0] * sx / det,
-                    (-fwd[0] - up[0] * sy) / det,
+                    (sx * up[1] - wx * fwd[1]) / det,
+                    (sy * up[1] - wy * fwd[1]) / det,
+                    (fwd[0] * wx - up[0] * sx) / det,
+                    (fwd[0] * wy - up[0] * sy) / det,
                     0, 0
                 );
             }
@@ -1148,10 +1170,12 @@ export class Player extends GameObject {
      *
      * @param position - The target position to move to
      * @param time - The time in seconds to complete the movement
+     * @param up - Optional world-space up direction (see {@link GameObject.moveTo}).
      * @example
      *   player.moveTo({x: 500, y: 300}, 2.0); // Moves to position over 2 seconds
      */
-    moveTo(position: Position2D, time: number) {
+    moveTo(position: Position2D, time: number, up?: vec2) {
+        if (up) this.worldUpVector = [up[0], up[1]];
         this.circleState = null;
         const dx = position.x - this.x;
         const dy = position.y - this.y;
