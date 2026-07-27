@@ -285,7 +285,7 @@ export class GameObject {
     /** The x component of the orientation, to make movement computation more efficient */
     direction_x : number = 0;
     /** The y component of the orientation, to make movement computation more efficient */
-    direction_y : number = 1;
+    direction_y : number = -1;
 
     /** When true, mirrors the sprite horizontally when movement direction is > 90° from spriteForwardVector. Useful for side-view games. */
     mirrorOnDirection: boolean = false;
@@ -403,6 +403,9 @@ export class GameObject {
         this.hitboxXOffset = gameclass.hitboxXOffset;
         this.hitboxYOffset = gameclass.hitboxYOffset;
         this.orientation = 0;
+        this.direction_x = Math.cos(this.orientation - Math.PI / 2);
+        this.direction_y = Math.sin(this.orientation - Math.PI / 2);
+
         this.speed = gameclass.defaultSpeed;
         this.spriteForwardVector = [...gameclass.defaultSpriteForwardVector];
         this.singleCollisionOnly = gameclass.defaultSingleCollisionOnly;
@@ -911,12 +914,8 @@ export class GameObject {
         /* Align sprite forward vector with facing direction */
         {
             const fwd = this.spriteForwardVector;
-            const facing_norm = Math.sqrt(
-                this.direction_x * this.direction_x +
-                this.direction_y * this.direction_y
-            );
-            const facingX = facing_norm > 0 ? this.direction_x / facing_norm : fwd[0];
-            const facingY = facing_norm > 0 ? this.direction_y / facing_norm : fwd[1];
+            const facingX = Math.sin(this.orientation);
+            const facingY = -Math.cos(this.orientation);
 
             const rawAngle = Math.atan2(
                 fwd[0] * facingY - fwd[1] * facingX,
