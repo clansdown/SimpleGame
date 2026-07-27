@@ -945,11 +945,13 @@ export class GameObject {
 
             const det = fwd[0] * up[1] - fwd[1] * up[0];
             const worldUpInvalid = isNaN(wx) || isNaN(wy) || (wx === 0 && wy === 0);
+            // If facing and worldUp are (anti)parallel the matrix rows are dependent
+            const facingCrossWorldUp = Math.abs(sx * wy - sy * wx);
 
-            if (Math.abs(det) < 0.001 || worldUpInvalid) {
-                // Degenerate sprite frame or invalid world-up — fall back
-                // to a simple rotation so the sprite at least faces the
-                // right direction.
+            if (Math.abs(det) < 0.001 || worldUpInvalid || facingCrossWorldUp < 0.001) {
+                // Sprite frame is degenerate, world-up is invalid, or facing
+                // and world-up are (anti)parallel — fall back to a simple
+                // rotation so the sprite at least faces the right direction.
                 const rawAngle = Math.atan2(
                     fwd[0] * sy - fwd[1] * sx,
                     fwd[0] * sx + fwd[1] * sy
