@@ -875,11 +875,11 @@ export class GameObject {
         // --- Compute facing direction ---
         // In the centre's local frame at angle θ:
         //   radial outward = (cosθ, sinθ)
-        //   clockwise tangent = (sinθ, -cosθ)
+        //   tangent = direction * (sinθ, -cosθ)  (CW=+, CCW=-)
         // The facing vector is interpreted as:
         //   facingX × tangent + facingY × radial
-        const worldDirX = state.facingX * sinA + state.facingY * cosA;
-        const worldDirY = state.facingX * (-cosA) + state.facingY * sinA;
+        const worldDirX = state.facingX * sinA * state.direction + state.facingY * cosA;
+        const worldDirY = state.facingX * (-cosA) * state.direction + state.facingY * sinA;
 
         // Rotate facing by centre's orientation
         let dirX: number;
