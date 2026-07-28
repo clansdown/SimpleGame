@@ -179,6 +179,7 @@ removes game objects and resets the camera.
 | `setCameraFollowsPlayer(follows)` | function | Toggle camera tracking. |
 | `setBackground(tiles, whenLoaded?)` | function | Set background from image URLs. |
 | `setBackgroundMode(mode)` | function | `"tile"` (default, scrolls with camera) or `"stretch"` (fills viewport, no scroll). |
+| `setBackgroundTileSize(width, height)` | function | Tile size in board coordinates for tiled backgrounds. Both dimensions required; images scaled to fit. Tile mode only. |
 | `clear()` | function | Remove all game objects and reset camera. Use for level restart. Keeps engine running. |
 | `destroyEngine()` | function | Full teardown. Stops loop, removes listeners, clears callbacks, game state. Engine must be re-initialised with `initEngine()` afterwards. |
 | `debug(text)` | function | Write to the debug div. |

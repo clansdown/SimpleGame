@@ -70,6 +70,8 @@ let maxCameraMovementPerSecond = 100;
 
 let backgroundTileset : HTMLImageElement[] = [];
 let backgroundMode: "tile" | "stretch" = "tile";
+let backgroundTileWidth: number | null = null;
+let backgroundTileHeight: number | null = null;
 export class CollisionAction {
     sourceGameClass : GameObjectClass|null;
     sourceGameObject : GameObject|null;
@@ -527,8 +529,11 @@ function draw() {
         if(backgroundMode === "stretch") {
             ctx.drawImage(backgroundTileset[0], 0, 0, canvas.width, canvas.height);
         } else {
-            const tileWidth = backgroundTileset[0].width;
-            const tileHeight = backgroundTileset[0].height;
+            const customW = backgroundTileWidth;
+            const customH = backgroundTileHeight;
+            const hasCustomSize = customW !== null && customH !== null;
+            const tileWidth  = hasCustomSize ? customW! : backgroundTileset[0].width;
+            const tileHeight = hasCustomSize ? customH! : backgroundTileset[0].height;
 
             const base_x = Math.floor(windowX/tileWidth)*tileWidth;
             const base_y = Math.floor(windowY/tileHeight)*tileHeight;
@@ -536,7 +541,11 @@ function draw() {
             for(let x = base_x; x <= base_x + windowWidth + tileWidth; x += tileWidth) {
                 for(let y = base_y; y <= base_y + windowHeight + tileHeight; y += tileHeight) {
                     const img = backgroundTileset[Math.floor(randFromCoordinates(Math.floor(x/tileWidth), Math.floor(y/tileWidth))*backgroundTileset.length)];
-                    ctx.drawImage(img, x-windowX, y-windowY);
+                    if (hasCustomSize) {
+                        ctx.drawImage(img, x-windowX, y-windowY, tileWidth, tileHeight);
+                    } else {
+                        ctx.drawImage(img, x-windowX, y-windowY);
+                    }
                 }
             }
         }
@@ -867,6 +876,18 @@ export function setBackgroundMode(mode: "tile" | "stretch"): void {
 }
 
 /**
+ * Sets the tile size in board coordinates for tiled backgrounds.
+ * Both width and height must be set; images will be scaled to fit.
+ *
+ * @param width  - Tile width in board units
+ * @param height - Tile height in board units
+ */
+export function setBackgroundTileSize(width: number, height: number): void {
+    backgroundTileWidth = width;
+    backgroundTileHeight = height;
+}
+
+/**
  * Sets the background to be one or more tiles (they must be the same size) given by file names
  * If there is more than one, the tiles will be randomly selected for their locations in the backgrounds so that
  * there won't be a repetition pattern in the tiling. The larger the number of tiles, the better the effect will be.
@@ -1011,4 +1032,6 @@ export function destroyEngine(): void {
     cameraFollowsPlayer = true;
     maxCameraMovementPerSecond = 100;
     backgroundMode = "tile";
+    backgroundTileWidth = null;
+    backgroundTileHeight = null;
 }
