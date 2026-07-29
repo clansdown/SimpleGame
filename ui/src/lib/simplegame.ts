@@ -63,6 +63,17 @@ let dragCandidateStartX : number = 0;
 let dragCandidateStartY : number = 0;
 const DRAG_THRESHOLD = 10;
 
+// Board panning (drag-to-scroll the viewport)
+let boardPanEnabled: boolean = false;
+let boardPanning: boolean = false;
+let boardPanStartViewportFracX: number = 0;
+let boardPanStartViewportFracY: number = 0;
+let boardPanStartWindowX: number = 0;
+let boardPanStartWindowY: number = 0;
+let boardPanRate: number = 1.0;
+let boardPanSuppressClick: boolean = false;
+let boardPanCursorOriginal: string = '';
+
 let stillNeedInitialMouseClick : boolean = true;
 
 let cameraFollowsPlayer : boolean = true;
@@ -196,7 +207,7 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
                 if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] handleMouseUp: click obj=${owner.gameclass.name} button=${button}`);
             }
         }
-        if (!clickHandled) {
+        if (!clickHandled && !boardPanSuppressClick) {
             const now = Date.now();
             if ((now - (mouseDownTimes.get(key) || 0)) <= 600) {
                 const callback = onMouseClickMap.get(button);
@@ -264,6 +275,9 @@ export function attachEventListeners() {
     canvas.addEventListener('mousemove', eventHandlerMouseMove);
     canvas.addEventListener('mousedown', eventHandlerMouseDown);
     canvas.addEventListener('mouseup', eventHandlerMouseUp);
+    canvas.addEventListener('touchstart', eventHandlerTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', eventHandlerTouchMove, { passive: false });
+    canvas.addEventListener('touchend', eventHandlerTouchEnd, { passive: false });
     canvas.focus();
 }
 
@@ -277,6 +291,9 @@ export function removeEventListeners() {
     canvas.removeEventListener('mousemove', eventHandlerMouseMove);
     canvas.removeEventListener('mousedown', eventHandlerMouseDown);
     canvas.removeEventListener('mouseup', eventHandlerMouseUp);
+    canvas.removeEventListener('touchstart', eventHandlerTouchStart);
+    canvas.removeEventListener('touchmove', eventHandlerTouchMove);
+    canvas.removeEventListener('touchend', eventHandlerTouchEnd);
 }
 
 /**
@@ -327,6 +344,19 @@ function eventHandlerMouseMove(event : MouseEvent) {
         if (handler) handler();
         if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] drag: target=${dragTarget.gameclass.name} to (${mousePosition.x}, ${mousePosition.y})`);
     }
+
+    // Board panning: compute delta in viewport-fraction space, convert to board units
+    if (boardPanning) {
+        const currentFracX = (event.clientX - rect.left) / canvas.clientWidth;
+        const currentFracY = (event.clientY - rect.top) / canvas.clientHeight;
+        const deltaFracX = currentFracX - boardPanStartViewportFracX;
+        const deltaFracY = currentFracY - boardPanStartViewportFracY;
+        windowX = Math.max(0, Math.min(boardWidth - windowWidth, boardPanStartWindowX - deltaFracX * windowWidth * boardPanRate));
+        windowY = Math.max(0, Math.min(boardHeight - windowHeight, boardPanStartWindowY - deltaFracY * windowHeight * boardPanRate));
+        // Recompute mouse position since windowX/windowY changed
+        mousePosition.x = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
+        mousePosition.y = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
+    }
 }
 
 function eventHandlerMouseDown(event : MouseEvent) {
@@ -351,6 +381,17 @@ function eventHandlerMouseDown(event : MouseEvent) {
     if (event.buttons & 1) handleMouseDown(0, 'mouse1', event, boardX, boardY);
     if (event.buttons & 4) handleMouseDown(1, 'mouse2', event, boardX, boardY);
     if (event.buttons & 2) handleMouseDown(2, 'mouse3', event, boardX, boardY);
+
+    // Board panning: start on left-click when nothing captured it
+    if (boardPanEnabled && (event.buttons & 1) && !dragCandidate && !mouseOwner.has(0) && !boardPanning) {
+        boardPanning = true;
+        boardPanStartViewportFracX = (event.clientX - rect.left) / canvas.clientWidth;
+        boardPanStartViewportFracY = (event.clientY - rect.top) / canvas.clientHeight;
+        boardPanStartWindowX = windowX;
+        boardPanStartWindowY = windowY;
+        boardPanCursorOriginal = canvas.style.cursor;
+        canvas.style.cursor = 'none';
+    }
 }
 
 function eventHandlerMouseUp(event : MouseEvent) {
@@ -358,9 +399,18 @@ function eventHandlerMouseUp(event : MouseEvent) {
     const boardX = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
     const boardY = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
 
+    // Board panning: end on left-button release, suppress click
+    if (boardPanning && !(event.buttons & 1)) {
+        boardPanning = false;
+        boardPanSuppressClick = true;
+        canvas.style.cursor = boardPanCursorOriginal;
+    }
+
     if (!(event.buttons & 1)) handleMouseUp(0, 'mouse1', event, boardX, boardY);
     if (!(event.buttons & 4)) handleMouseUp(1, 'mouse2', event, boardX, boardY);
     if (!(event.buttons & 2)) handleMouseUp(2, 'mouse3', event, boardX, boardY);
+
+    boardPanSuppressClick = false;
 
     if (dragCandidate) {
         dragCandidate = null;
@@ -379,6 +429,44 @@ function eventHandlerMouseUp(event : MouseEvent) {
             dragButton = -1;
         }
     }
+}
+
+/**
+ * Single-finger touch drag synthesises left-button mouse events so
+ * the engine's existing mousedown / mousemove / mouseup handlers
+ * automatically get board panning, object dragging, and clicks.
+ * Only the first touch (changedTouches[0]) is tracked.
+ */
+function eventHandlerTouchStart(event: TouchEvent): void {
+    event.preventDefault();
+    const touch = event.changedTouches[0];
+    canvas.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        button: 0,
+        buttons: 1,
+    }));
+}
+
+function eventHandlerTouchMove(event: TouchEvent): void {
+    event.preventDefault();
+    const touch = event.changedTouches[0];
+    canvas.dispatchEvent(new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        buttons: 1,
+    }));
+}
+
+function eventHandlerTouchEnd(event: TouchEvent): void {
+    event.preventDefault();
+    const touch = event.changedTouches[0];
+    canvas.dispatchEvent(new MouseEvent('mouseup', {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        button: 0,
+        buttons: 0,
+    }));
 }
 
 function eventHandlerKeyDown(event : KeyboardEvent) {
@@ -876,6 +964,43 @@ export function setBackgroundMode(mode: "tile" | "stretch"): void {
 }
 
 /**
+ * Enables or disables board panning — dragging the viewport by
+ * left-clicking or touching empty space (no game object underneath).
+ * The user should call {@link setCameraFollowsPlayer | `setCameraFollowsPlayer(false)`}
+ * to prevent the camera from fighting manual panning.
+ *
+ * @param enabled - `true` to allow panning, `false` (default) to disable
+ */
+export function setBoardPanEnabled(enabled: boolean): void {
+    boardPanEnabled = enabled;
+    if (!enabled && boardPanning) {
+        boardPanning = false;
+        canvas.style.cursor = boardPanCursorOriginal;
+    }
+}
+
+/**
+ * Sets the pan speed multiplier. Controls how much board space the
+ * viewport travels relative to the cursor movement across the viewport.
+ *
+ * @param rate - Pan speed multiplier (default `1.0`, 1:1 grip)
+ * @example
+ *   setBoardPanRate(0.5);  // slow — 2× drag to cross the viewport
+ *   setBoardPanRate(2.0);  // fast — half a drag to cross the viewport
+ */
+export function setBoardPanRate(rate: number): void {
+    boardPanRate = rate;
+}
+
+/**
+ * Returns whether the board is currently being dragged by the user
+ * (mouse or touch).
+ */
+export function isBoardPanning(): boolean {
+    return boardPanning;
+}
+
+/**
  * Sets the tile size in board coordinates for tiled backgrounds.
  * Both width and height must be set; images will be scaled to fit.
  *
@@ -958,6 +1083,8 @@ export function clear() {
     dragCandidate = null;
     dragButton = -1;
     mouseOwner.clear();
+    boardPanning = false;
+    boardPanSuppressClick = false;
     windowX = 0;
     windowY = 0;
 }
@@ -1034,4 +1161,7 @@ export function destroyEngine(): void {
     backgroundMode = "tile";
     backgroundTileWidth = null;
     backgroundTileHeight = null;
+    boardPanEnabled = false;
+    boardPanRate = 1.0;
+    canvas.style.cursor = '';
 }

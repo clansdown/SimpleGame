@@ -177,6 +177,9 @@ removes game objects and resets the camera.
 | `setBoardSize(width, height)` | function | Set the virtual world size. |
 | `setSize(width, height)` | function | Alias for `setBoardSize`. |
 | `setCameraFollowsPlayer(follows)` | function | Toggle camera tracking. |
+| `setBoardPanEnabled(enabled)` | function | Allow left-click/touch drag on empty space to pan the viewport (default `false`). Opt-in. Caller should also disable `setCameraFollowsPlayer`. |
+| `setBoardPanRate(rate)` | function | Pan speed multiplier (default `1.0` = 1:1 grip). `0.5` = slow, `2.0` = fast. |
+| `isBoardPanning()` | function | Returns `boolean` — is the board currently being dragged? |
 | `setBackground(tiles, whenLoaded?)` | function | Set background from image URLs. |
 | `setBackgroundMode(mode)` | function | `"tile"` (default, scrolls with camera) or `"stretch"` (fills viewport, no scroll). |
 | `setBackgroundTileSize(width, height)` | function | Tile size in board coordinates for tiled backgrounds. Both dimensions required; images scaled to fit. Tile mode only. |
