@@ -356,6 +356,13 @@ export class GameObject {
     /** Draw order. Lower values draw first (behind), higher values draw on top. Same-index objects preserve insertion order. Default 0. */
     zIndex: number = 0;
 
+    drawOverlay: ((ctx: CanvasRenderingContext2D) => void) | null = null;
+
+    private progressBarGetter: (() => number) | null = null;
+    private progressBarFgColor: string = '#00ff00';
+    private progressBarOutlineColor: string = '#ffffff';
+    private progressBarOpacity: number = 1.0;
+
     gameclass : GameObjectClass;
 
     isHovered: boolean = false;
@@ -455,6 +462,32 @@ export class GameObject {
      */
     setMaxDuration(millis : number) {
         this.maxDurationMillis = millis;
+    }
+
+    /**
+     * Attaches a progress bar drawn on this object.
+     *
+     * The bar is drawn centered 20px below the object's origin, 80% of
+     * the object's width wide and 6px tall, after the sprite and
+     * {@link drawOverlay | `drawOverlay`} have rendered.
+     *
+     * @param getter - Function returning the fill fraction (0–1), or `null` to hide the bar
+     * @param fgColor - CSS colour string for the fill (e.g. `'#00ff00'`)
+     * @param outlineColor - CSS colour string for the border (e.g. `'#ffffff'`)
+     * @param opacity - Bar opacity 0–1 (multiplied with the object's own opacity)
+     * @example
+     *   healthBar.setProgressBar(
+     *     () => this.hitpoints / this.maxHitpoints,
+     *     '#00ff00',
+     *     '#ffffff',
+     *     0.9
+     *   );
+     */
+    setProgressBar(getter: (() => number) | null, fgColor: string, outlineColor: string, opacity: number): void {
+        this.progressBarGetter = getter;
+        this.progressBarFgColor = fgColor;
+        this.progressBarOutlineColor = outlineColor;
+        this.progressBarOpacity = opacity;
     }
 
     protected updateAttached() {
@@ -1003,6 +1036,26 @@ export class GameObject {
             ctx.scale(this.width/effectiveImage.width, this.height/effectiveImage.height);
 
         ctx.drawImage(effectiveImage, -effectiveImage.width / 2, -effectiveImage.height / 2);
+
+        if (this.drawOverlay !== null) {
+            this.drawOverlay(ctx);
+        }
+
+        if (this.progressBarGetter !== null) {
+            ctx.save();
+            ctx.globalAlpha = this.progressBarOpacity * (this.opacity < 1 ? this.opacity : 1);
+            const barW = this.width * 0.8;
+            const barH = 6;
+            const barX = -barW / 2;
+            const barY = this.height / 2 + 20;
+            ctx.fillStyle = this.progressBarOutlineColor;
+            ctx.fillRect(barX, barY, barW, barH);
+            const value = Math.max(0, Math.min(1, this.progressBarGetter()));
+            ctx.fillStyle = this.progressBarFgColor;
+            ctx.fillRect(barX + 1, barY + 1, (barW - 2) * value, barH - 2);
+            ctx.restore();
+        }
+
         ctx.restore();
     }
 

@@ -1057,6 +1057,13 @@ background.zIndex = -10;   // behind everything — never intercepts clicks
 ui_panel.zIndex = 100;     // on top of everything — captures all input
 ```
 
+### Overlay & Progress Bar
+
+| Member | Type | Default | Description |
+|--------|------|---------|-------------|
+| `drawOverlay` | `((ctx: CanvasRenderingContext2D) => void) \| null` | `null` | Called in `draw()` after the sprite image. The context is already translated, rotated, and scaled to the object's position and orientation — draw in local coords. Set to `null` to disable. |
+| `setProgressBar(getter, fgColor, outlineColor, opacity)` | method | — | Draw a bar on this object. `getter` returns 0–1 (or `null` to clear). Bar is 80% of object width × 6px, centered 20px below the origin. `fgColor`/`outlineColor` are CSS colour strings. `opacity` is 0–1, multiplied by the object's own opacity. |
+
 ### Fade-in / Fade-out
 
 Any `GameObject` can fade in at spawn and fade out before auto-destruction.
