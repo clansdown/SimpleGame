@@ -365,6 +365,7 @@ export class GameObject {
     private progressBarFgColor: string = '#00ff00';
     private progressBarOutlineColor: string = '#ffffff';
     private progressBarOpacity: number = 1.0;
+    private progressBarHeight: number = 6;
 
     gameclass : GameObjectClass;
 
@@ -470,27 +471,30 @@ export class GameObject {
     /**
      * Attaches a progress bar drawn on this object.
      *
-     * The bar is drawn centered 20px below the object's origin, 80% of
-     * the object's width wide and 6px tall, after the sprite and
-     * {@link drawOverlay | `drawOverlay`} have rendered.
+     * The bar is drawn in game (board) coordinates before the sprite
+     * size-scale transform, centered 20 game units below the object's
+     * origin, 80 % of the object's width wide.
      *
      * @param getter - Function returning the fill fraction (0–1), or `null` to hide the bar
      * @param fgColor - CSS colour string for the fill (e.g. `'#00ff00'`)
      * @param outlineColor - CSS colour string for the border (e.g. `'#ffffff'`)
      * @param opacity - Bar opacity 0–1 (multiplied with the object's own opacity)
+     * @param height  - Bar height in game units (default 6)
      * @example
      *   healthBar.setProgressBar(
      *     () => this.hitpoints / this.maxHitpoints,
      *     '#00ff00',
      *     '#ffffff',
-     *     0.9
+     *     0.9,
+     *     8
      *   );
      */
-    setProgressBar(getter: (() => number) | null, fgColor: string, outlineColor: string, opacity: number): void {
+    setProgressBar(getter: (() => number) | null, fgColor: string, outlineColor: string, opacity: number, height: number = 6): void {
         this.progressBarGetter = getter;
         this.progressBarFgColor = fgColor;
         this.progressBarOutlineColor = outlineColor;
         this.progressBarOpacity = opacity;
+        this.progressBarHeight = height;
     }
 
     protected updateAttached() {
@@ -1033,6 +1037,23 @@ export class GameObject {
         if (this.opacity < 1) {
             ctx.globalAlpha *= this.opacity;
         }
+
+        /* Progress bar — in game/board units, before the sprite size-scale transform */
+        if (this.progressBarGetter !== null) {
+            ctx.save();
+            ctx.globalAlpha = this.progressBarOpacity * (this.opacity < 1 ? this.opacity : 1);
+            const barW = this.width * 0.8;
+            const barH = this.progressBarHeight;
+            const barX = -barW / 2;
+            const barY = this.height / 2 + 20;
+            ctx.fillStyle = this.progressBarOutlineColor;
+            ctx.fillRect(barX, barY, barW, barH);
+            const value = Math.max(0, Math.min(1, this.progressBarGetter()));
+            ctx.fillStyle = this.progressBarFgColor;
+            ctx.fillRect(barX + 1, barY + 1, (barW - 2) * value, barH - 2);
+            ctx.restore();
+        }
+
         /* Scale */
         const effectiveImage = this.gameclass.getDamageSpriteImage(this.hitpoints) ?? this.gameclass.image;
         if(this.width > 0 && this.height > 0)
@@ -1042,21 +1063,6 @@ export class GameObject {
 
         if (this.drawOverlay !== null) {
             this.drawOverlay(ctx);
-        }
-
-        if (this.progressBarGetter !== null) {
-            ctx.save();
-            ctx.globalAlpha = this.progressBarOpacity * (this.opacity < 1 ? this.opacity : 1);
-            const barW = this.width * 0.8;
-            const barH = 6;
-            const barX = -barW / 2;
-            const barY = this.height / 2 + 20;
-            ctx.fillStyle = this.progressBarOutlineColor;
-            ctx.fillRect(barX, barY, barW, barH);
-            const value = Math.max(0, Math.min(1, this.progressBarGetter()));
-            ctx.fillStyle = this.progressBarFgColor;
-            ctx.fillRect(barX + 1, barY + 1, (barW - 2) * value, barH - 2);
-            ctx.restore();
         }
 
         ctx.restore();
