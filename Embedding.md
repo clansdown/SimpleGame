@@ -259,9 +259,9 @@ removes game objects and resets the camera.
 
 | Export | Description |
 |---|---|
-| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight (`hoverColor`), click press indication (`clickColor`), disabled state (`disabled`), background alpha (`backgroundOpacity`), tooltip support, and configurable icon layout (`IconLayout`). |
+| `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight (`hoverColor`), click press indication (`clickColor`), disabled state (`disabled`), background alpha (`backgroundOpacity`), rounded corners (`cornerRadius`), configurable foreground text colour (`foregroundColor`), tooltip support, and configurable icon layout (`IconLayout`). |
 | `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
-| `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`. |
+| `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`, `cornerRadius`, `foregroundColor`. |
 | `LayoutContainer` | Base class for `Row`, `Column`, `Page`, `ScrollablePage`. Provides `padding`, `gutter`, `borderWidth`/`borderColor`, `setJustify()`, `setAlign()`, `addChild()`/`removeChild()`, `layout()`. |
 | `Row` | Horizontal layout container (extends `LayoutContainer`). |
 | `Column` | Vertical layout container (extends `LayoutContainer`). |
@@ -456,6 +456,10 @@ The `isHovered` boolean is updated every frame for all game objects.
 | `setIconHeight(h)` | Icon render height in pixels (default 16). |
 | `setIconPadding(pad)` | Gap between icon and text (default 8). |
 | `setIconLayout(layout)` | `"left"` \| `"right"` \| `"above"` (default) \| `"below"`. |
+| `setBackgroundColor(color)` | Change background colour and re-derive hover/click variants. |
+| `setForegroundColor(color)` | Change text colour. |
+| `setBackgroundOpacity(opacity)` | Background opacity 0–1. |
+| `setCornerRadius(radius)` | Corner rounding in game units. `0` = square (default). |
 | `setTooltip(obj)` | Assign any `GameObject` as the tooltip (or `null` to remove). |
 | `setTooltipDelay(ms)` | Milliseconds of hover/press before tooltip appears (default 1000). |
 | `setTooltipFadeDuration(ms)` | Fade in/out duration in ms (default 200). |
@@ -467,6 +471,9 @@ The `isHovered` boolean is updated every frame for all game objects.
 | `hoverColor` | `string` | auto-derived | Colour when hovered (auto-brightened from `color`). |
 | `clickColor` | `string` | auto-derived | Colour when pressed (auto-darkened from `color`). |
 | `disabled` | `boolean` | `false` | When `true`, suppresses all interaction and draws a 40% gray overlay. |
+| `backgroundOpacity` | `number` | `1` | Opacity of the background fill/image (0–1). Multiplied by `opacity` at draw time. |
+| `cornerRadius` | `number` | `0` | Radius for rounded button corners in game units. `0` = square. |
+| `foregroundColor` | `string` | `"#000000"` | Text colour (CSS string). |
 | `backgroundOpacity` | `number` | `1.0` | Alpha for the background layer only (fill, image, border). Icon, text, and disabled overlay unaffected. |
 
 `ButtonOptions` fields: `width`, `height`, `backgroundImage`, `color`,

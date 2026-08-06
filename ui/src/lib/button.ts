@@ -20,6 +20,8 @@ export interface ButtonOptions {
     iconPadding?: number;
     iconLayout?: IconLayout;
     backgroundOpacity?: number;
+    cornerRadius?: number;
+    foregroundColor?: string;
 }
 
 export class ButtonClass extends GameObjectClass {
@@ -47,6 +49,8 @@ export class Button extends GameObject {
     iconPadding: number = 8;
     iconLayout: IconLayout = "above";
     backgroundOpacity: number = 1;
+    cornerRadius: number = 0;
+    foregroundColor: string = "#000000";
     isClicked: boolean = false;
     disabled: boolean = false;
     onClickCallback?: () => void;
@@ -87,6 +91,8 @@ export class Button extends GameObject {
         if (opts.iconPadding != null) this.iconPadding = opts.iconPadding;
         if (opts.iconLayout != null) this.iconLayout = opts.iconLayout;
         if (opts.backgroundOpacity != null) this.backgroundOpacity = opts.backgroundOpacity;
+        if (opts.cornerRadius != null) this.cornerRadius = opts.cornerRadius;
+        if (opts.foregroundColor != null) this.foregroundColor = opts.foregroundColor;
 
         // Load background image — onerror falls back to transparent GIF
         if (opts.backgroundImage) {
@@ -230,6 +236,38 @@ export class Button extends GameObject {
         this.disabled = disabled;
     }
 
+    /**
+     * Changes the background colour and re-derives hover/click variants
+     * (+32 / -32 RGB).
+     */
+    setBackgroundColor(color: string): void {
+        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": setBackgroundColor("${color}")`);
+        this.color = color;
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+        this.hoverColor = `#${Math.min(255, r + 32).toString(16).padStart(2, '0')}${Math.min(255, g + 32).toString(16).padStart(2, '0')}${Math.min(255, b + 32).toString(16).padStart(2, '0')}`;
+        this.clickColor = `#${Math.max(0, r - 32).toString(16).padStart(2, '0')}${Math.max(0, g - 32).toString(16).padStart(2, '0')}${Math.max(0, b - 32).toString(16).padStart(2, '0')}`;
+    }
+
+    /** Sets the text colour used for the button label. */
+    setForegroundColor(color: string): void {
+        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": setForegroundColor("${color}")`);
+        this.foregroundColor = color;
+    }
+
+    /** Sets the background opacity (0–1). */
+    setBackgroundOpacity(opacity: number): void {
+        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": setBackgroundOpacity(${opacity})`);
+        this.backgroundOpacity = opacity;
+    }
+
+    /** Sets the corner radius in game units. 0 = square (default). */
+    setCornerRadius(radius: number): void {
+        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": setCornerRadius(${radius})`);
+        this.cornerRadius = radius;
+    }
+
     canDrag(): boolean {
         return !this.disabled;
     }
@@ -334,6 +372,12 @@ export class Button extends GameObject {
 
         ctx.translate(this.x - offsetX, this.y - offsetY);
 
+        const bx = -this.width / 2;
+        const by = -this.height / 2;
+        const bw = this.width;
+        const bh = this.height;
+        const r = this.cornerRadius;
+
         // Determine fill color based on state
         let fillColor = this.color;
         if (!this.disabled) {
@@ -353,18 +397,37 @@ export class Button extends GameObject {
 
         const bgReady = this.backgroundImage?.complete === true;
         if (bgReady) {
-            ctx.drawImage(this.backgroundImage!, -this.width / 2, -this.height / 2, this.width, this.height);
-            if (this.isHovered || this.isClicked) {
-                ctx.fillStyle = this.isClicked ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.1)";
-                ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+            if (r > 0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(bx, by, bw, bh, r);
+                ctx.clip();
+                ctx.drawImage(this.backgroundImage!, bx, by, bw, bh);
+                if (this.isHovered || this.isClicked) {
+                    ctx.fillStyle = this.isClicked ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.1)";
+                    ctx.fill();
+                }
+                ctx.restore();
+            } else {
+                ctx.drawImage(this.backgroundImage!, bx, by, bw, bh);
+                if (this.isHovered || this.isClicked) {
+                    ctx.fillStyle = this.isClicked ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.1)";
+                    ctx.fillRect(bx, by, bw, bh);
+                }
             }
         } else {
             ctx.fillStyle = fillColor;
-            ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
-
             ctx.strokeStyle = this.isClicked ? "#404040" : "#000000";
             ctx.lineWidth = this.isClicked ? 3 : 2;
-            ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
+            if (r > 0) {
+                ctx.beginPath();
+                ctx.roundRect(bx, by, bw, bh, r);
+                ctx.fill();
+                ctx.stroke();
+            } else {
+                ctx.fillRect(bx, by, bw, bh);
+                ctx.strokeRect(bx, by, bw, bh);
+            }
         }
 
         if (needAlpha) {
@@ -372,7 +435,7 @@ export class Button extends GameObject {
         }
 
         // --- Icon + text layer ---
-        ctx.fillStyle = "#000000";
+        ctx.fillStyle = this.foregroundColor;
         ctx.font = "16px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -441,7 +504,13 @@ export class Button extends GameObject {
         // --- Gray overlay when disabled ---
         if (this.disabled) {
             ctx.fillStyle = "rgba(128, 128, 128, 0.4)";
-            ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+            if (r > 0) {
+                ctx.beginPath();
+                ctx.roundRect(bx, by, bw, bh, r);
+                ctx.fill();
+            } else {
+                ctx.fillRect(bx, by, bw, bh);
+            }
         }
 
         if (buttonDebugLevel >= 1 && (this.isHovered || this.isClicked)) {
