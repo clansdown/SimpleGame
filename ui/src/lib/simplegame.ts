@@ -1168,6 +1168,50 @@ export function getZoomLevel(): number {
 }
 
 /**
+ * Moves the camera so the given board coordinates appear at the centre
+ * of the viewport. The position is clamped to keep the viewport on the
+ * board — the camera will never show space beyond the board boundary.
+ *
+ * Call {@link setCameraFollowsPlayer | `setCameraFollowsPlayer(false)`}
+ * first if you want the camera to stay where you put it; otherwise the
+ * player-following logic will override it on the next tick.
+ *
+ * @param centerX - The x-coordinate (board units) to centre on
+ * @param centerY - The y-coordinate (board units) to centre on
+ * @example
+ *   setCameraFollowsPlayer(false);
+ *   setCameraPosition(500, 300);
+ */
+export function setCameraPosition(centerX: number, centerY: number): void {
+    windowX = Math.max(0, Math.min(boardWidth - windowWidth, centerX - windowWidth / 2));
+    windowY = Math.max(0, Math.min(boardHeight - windowHeight, centerY - windowHeight / 2));
+}
+
+/**
+ * Changes the canvas pixel resolution and the engine's nominal viewport
+ * size. Use this to set the viewport aspect ratio — at 1× zoom the
+ * visible board area matches the pixel dimensions of the canvas.
+ *
+ * Re-clamps the camera position so the viewport stays on the board
+ * after the resize.
+ *
+ * @param width  - New viewport width in board units / canvas pixels
+ * @param height - New viewport height in board units / canvas pixels
+ * @example
+ *   setViewportSize(1920, 1080);  // 16:9 widescreen viewport
+ */
+export function setViewportSize(width: number, height: number): void {
+    canvas.width = width;
+    canvas.height = height;
+    nominalWindowWidth = width;
+    nominalWindowHeight = height;
+    windowWidth = nominalWindowWidth / zoomLevel;
+    windowHeight = nominalWindowHeight / zoomLevel;
+    windowX = Math.max(0, Math.min(boardWidth - windowWidth, windowX));
+    windowY = Math.max(0, Math.min(boardHeight - windowHeight, windowY));
+}
+
+/**
  * Sets the tile size in board coordinates for tiled backgrounds.
  * Both width and height must be set; images will be scaled to fit.
  *

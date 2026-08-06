@@ -177,6 +177,8 @@ removes game objects and resets the camera.
 | `setBoardSize(width, height)` | function | Set the virtual world size. |
 | `setSize(width, height)` | function | Alias for `setBoardSize`. |
 | `setCameraFollowsPlayer(follows)` | function | Toggle camera tracking. |
+| `setCameraPosition(centerX, centerY)` | function | Centre the viewport on board coordinates. Clamped to board edges. Disable `setCameraFollowsPlayer` first to keep control. |
+| `setViewportSize(width, height)` | function | Set canvas resolution and base viewport size (board units at 1× zoom). Also sets the viewport aspect ratio. Re-clamps camera. |
 | `setBoardPanEnabled(enabled)` | function | Allow left-click/touch drag on empty space to pan the viewport (default `false`). Opt-in. Caller should also disable `setCameraFollowsPlayer`. |
 | `setBoardPanRate(rate)` | function | Pan speed multiplier (default `1.0` = 1:1 grip). `0.5` = slow, `2.0` = fast. |
 | `isBoardPanning()` | function | Returns `boolean` — is the board currently being dragged? |
