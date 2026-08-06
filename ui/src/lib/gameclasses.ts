@@ -356,6 +356,9 @@ export class GameObject {
     /** Draw order. Lower values draw first (behind), higher values draw on top. Same-index objects preserve insertion order. Default 0. */
     zIndex: number = 0;
 
+    /** When `true` the object is positioned in canvas-pixel (screen) coordinates instead of board coordinates. It stays fixed on screen regardless of camera movement, zoom, or panning. */
+    hud: boolean = false;
+
     drawOverlay: ((ctx: CanvasRenderingContext2D) => void) | null = null;
 
     private progressBarGetter: (() => number) | null = null;

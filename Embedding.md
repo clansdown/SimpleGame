@@ -1025,6 +1025,7 @@ panel.setVisible(true);
 | `visible` | `boolean` | `true` | Set directly or via `setVisible()` on containers. |
 | `opacity` | `number` | `1` | Opacity multiplier (0–1) for rendering. `1` = fully opaque (default — no performance cost; `globalAlpha` is not touched). `0` = fully invisible. Compounds with fade-in/out effects. |
 | `zIndex` | `number` | `0` | Draw order. Lower values draw first (behind), higher values draw on top. Same-index objects preserve insertion order. |
+| `hud` | `boolean` | `false` | When `true`, the object is positioned in canvas-pixel (screen) coordinates instead of board coordinates. It stays fixed on screen regardless of camera movement, zoom, or panning. HUD objects are drawn after all board objects and receive mouse input first. |
 
 ### Lifetime & boundaries
 

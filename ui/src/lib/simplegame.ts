@@ -55,6 +55,8 @@ let notAllClassesAreLoaded : boolean = true;
 
 /** Mouse coordinates on the board */
 let mousePosition : Position2D = {x: 0, y: 0};
+let screenMouseX: number = 0;
+let screenMouseY: number = 0;
 
 let dragTarget : GameObject | null = null;
 let dragButton : number = -1;
@@ -154,7 +156,7 @@ function isVisible(obj: GameObject): boolean {
     return true;
 }
 
-function handleMouseDown(button: number, key: string, event: MouseEvent, boardX: number, boardY: number) {
+function handleMouseDown(button: number, key: string, event: MouseEvent, boardX: number, boardY: number, screenX: number, screenY: number) {
     let initial = keyMap.has(key) ? !keyMap.get(key) : true;
     keyMap.set(key, true);
     if (initial) {
@@ -163,26 +165,46 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
         let best: GameObject | null = null;
         let bestZ = -Infinity;
 
-        for (const obj of gameObjects) {
+        /* HUD objects — always checked first (they are on top), screen coords */
+        const hudObjects = [...gameObjects].filter(o => o.hud);
+        hudObjects.sort((a, b) => b.zIndex - a.zIndex);
+        for (const obj of hudObjects) {
             if (!isVisible(obj)) continue;
-            const hit = isPointInHitbox(obj, boardX, boardY);
+            const hit = isPointInHitbox(obj, screenX, screenY);
             if (hit) {
                 hitCount++;
                 const hasHandler = obj.onMouseDownMap.has(button) || obj.onMouseUpMap.has(button) || obj.onClickMap.has(button);
-                if (hasHandler && obj.zIndex > bestZ) {
-                    bestZ = obj.zIndex;
+                if (hasHandler) {
                     best = obj;
+                    break;
                 }
             }
-            if (buttonDebugLevel >= 10) {
-                console.log(
-                    `[ButtonDebug]   mousedown obj="${obj.gameclass.name}" ` +
-                    `pos=(${obj.x.toFixed(1)},${obj.y.toFixed(1)}) ` +
-                    `hitbox=${obj.hitboxWidth}x${obj.hitboxHeight} ` +
-                    `offset=(${obj.hitboxXOffset},${obj.hitboxYOffset}) ` +
-                    `mouse=(${boardX.toFixed(1)},${boardY.toFixed(1)}) ` +
-                    `hit=${hit}`
-                );
+        }
+
+        /* Board objects — fall back if no HUD object captured the event */
+        if (!best) {
+            for (const obj of gameObjects) {
+                if (obj.hud) continue;
+                if (!isVisible(obj)) continue;
+                const hit = isPointInHitbox(obj, boardX, boardY);
+                if (hit) {
+                    hitCount++;
+                    const hasHandler = obj.onMouseDownMap.has(button) || obj.onMouseUpMap.has(button) || obj.onClickMap.has(button);
+                    if (hasHandler && obj.zIndex > bestZ) {
+                        bestZ = obj.zIndex;
+                        best = obj;
+                    }
+                }
+                if (buttonDebugLevel >= 10) {
+                    console.log(
+                        `[ButtonDebug]   mousedown obj="${obj.gameclass.name}" ` +
+                        `pos=(${obj.x.toFixed(1)},${obj.y.toFixed(1)}) ` +
+                        `hitbox=${obj.hitboxWidth}x${obj.hitboxHeight} ` +
+                        `offset=(${obj.hitboxXOffset},${obj.hitboxYOffset}) ` +
+                        `mouse=(${boardX.toFixed(1)},${boardY.toFixed(1)}) ` +
+                        `hit=${hit}`
+                    );
+                }
             }
         }
 
@@ -333,12 +355,21 @@ export function setCanvas(newCanvas: HTMLCanvasElement) {
 
 function eventHandlerMouseMove(event : MouseEvent) {
     const rect = canvas.getBoundingClientRect();
-    mousePosition.x = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
-    mousePosition.y = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
+    const fracX = (event.clientX - rect.left) / canvas.clientWidth;
+    const fracY = (event.clientY - rect.top) / canvas.clientHeight;
+    mousePosition.x = windowWidth * fracX + windowX;
+    mousePosition.y = windowHeight * fracY + windowY;
+    screenMouseX = canvas.width * fracX;
+    screenMouseY = canvas.height * fracY;
 
     if (dragCandidate && !dragTarget) {
-        const dx = mousePosition.x - dragCandidateStartX;
-        const dy = mousePosition.y - dragCandidateStartY;
+        const useScreen = dragCandidate.hud;
+        const startX = useScreen ? dragCandidateStartX : dragCandidateStartX;
+        const startY = useScreen ? dragCandidateStartY : dragCandidateStartY;
+        const curX = useScreen ? screenMouseX : mousePosition.x;
+        const curY = useScreen ? screenMouseY : mousePosition.y;
+        const dx = curX - startX;
+        const dy = curY - startY;
         if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
             dragTarget = dragCandidate;
             dragCandidate = null;
@@ -354,13 +385,18 @@ function eventHandlerMouseMove(event : MouseEvent) {
 
     if (dragTarget) {
         if (dragTarget.dragFollowsCursor) {
-            dragTarget.x = mousePosition.x;
-            dragTarget.y = mousePosition.y;
+            if (dragTarget.hud) {
+                dragTarget.x = screenMouseX;
+                dragTarget.y = screenMouseY;
+            } else {
+                dragTarget.x = mousePosition.x;
+                dragTarget.y = mousePosition.y;
+            }
             dragTarget.velocity = 0;
         }
         const handler = dragTarget.onDragMap.get(dragButton);
         if (handler) handler();
-        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] drag: target=${dragTarget.gameclass.name} to (${mousePosition.x}, ${mousePosition.y})`);
+        if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] drag: target=${dragTarget.gameclass.name} to (${dragTarget.x}, ${dragTarget.y})`);
     }
 
     // Board panning: compute delta in viewport-fraction space, convert to board units
@@ -372,33 +408,56 @@ function eventHandlerMouseMove(event : MouseEvent) {
         windowX = Math.max(0, Math.min(boardWidth - windowWidth, boardPanStartWindowX - deltaFracX * windowWidth * boardPanRate));
         windowY = Math.max(0, Math.min(boardHeight - windowHeight, boardPanStartWindowY - deltaFracY * windowHeight * boardPanRate));
         // Recompute mouse position since windowX/windowY changed
-        mousePosition.x = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
-        mousePosition.y = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
+        mousePosition.x = windowWidth * currentFracX + windowX;
+        mousePosition.y = windowHeight * currentFracY + windowY;
+        screenMouseX = canvas.width * currentFracX;
+        screenMouseY = canvas.height * currentFracY;
     }
 }
 
 function eventHandlerMouseDown(event : MouseEvent) {
     stillNeedInitialMouseClick = false;
     const rect = canvas.getBoundingClientRect();
-    const boardX = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
-    const boardY = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
+    const fracX = (event.clientX - rect.left) / canvas.clientWidth;
+    const fracY = (event.clientY - rect.top) / canvas.clientHeight;
+    const boardX = windowWidth * fracX + windowX;
+    const boardY = windowHeight * fracY + windowY;
+    const screenX = canvas.width * fracX;
+    const screenY = canvas.height * fracY;
 
     if (event.buttons & 1) {
-        for (const obj of [...gameObjects]) {
-            if (obj.draggable && obj.canDrag() && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY) && isVisible(obj)) {
+        /* HUD drag candidates — screen coords, topmost z first */
+        const hudDrags = [...gameObjects].filter(o => o.hud && o.draggable && o.canDrag() && !o.isDragging);
+        hudDrags.sort((a, b) => b.zIndex - a.zIndex);
+        for (const obj of hudDrags) {
+            if (!dragTarget && !dragCandidate && isPointInHitbox(obj, screenX, screenY) && isVisible(obj)) {
                 dragCandidate = obj;
                 dragButton = 0;
-                dragCandidateStartX = boardX;
-                dragCandidateStartY = boardY;
-                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] dragCandidate: obj=${obj.gameclass.name} at (${boardX}, ${boardY})`);
+                dragCandidateStartX = screenX;
+                dragCandidateStartY = screenY;
+                if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] dragCandidate (HUD): obj=${obj.gameclass.name} at (${screenX}, ${screenY})`);
                 break;
+            }
+        }
+        /* Board drag candidates — existing logic */
+        if (!dragCandidate) {
+            for (const obj of [...gameObjects]) {
+                if (obj.hud) continue;
+                if (obj.draggable && obj.canDrag() && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY) && isVisible(obj)) {
+                    dragCandidate = obj;
+                    dragButton = 0;
+                    dragCandidateStartX = boardX;
+                    dragCandidateStartY = boardY;
+                    if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] dragCandidate: obj=${obj.gameclass.name} at (${boardX}, ${boardY})`);
+                    break;
+                }
             }
         }
     }
 
-    if (event.buttons & 1) handleMouseDown(0, 'mouse1', event, boardX, boardY);
-    if (event.buttons & 4) handleMouseDown(1, 'mouse2', event, boardX, boardY);
-    if (event.buttons & 2) handleMouseDown(2, 'mouse3', event, boardX, boardY);
+    if (event.buttons & 1) handleMouseDown(0, 'mouse1', event, boardX, boardY, screenX, screenY);
+    if (event.buttons & 4) handleMouseDown(1, 'mouse2', event, boardX, boardY, screenX, screenY);
+    if (event.buttons & 2) handleMouseDown(2, 'mouse3', event, boardX, boardY, screenX, screenY);
 
     // Board panning: start on left-click when nothing captured it
     if (boardPanEnabled && (event.buttons & 1) && !dragCandidate && !mouseOwner.has(0) && !boardPanning) {
@@ -756,6 +815,7 @@ function draw() {
 
     /* Objects */
     for(const object of [...gameObjects].sort((a, b) => a.zIndex - b.zIndex)) {
+        if (object.hud) continue;
         if (isVisible(object)) {
             object.draw(ctx, windowX, windowY);
         }
@@ -768,6 +828,15 @@ function draw() {
 
     if (zoomEnabled) {
         ctx.restore();
+    }
+
+    /* HUD objects — screen coordinates, no zoom, no camera offset */
+    const hudObjects = [...gameObjects].filter(o => o.hud);
+    hudObjects.sort((a, b) => a.zIndex - b.zIndex);
+    for(const object of hudObjects) {
+        if (isVisible(object)) {
+            object.draw(ctx, 0, 0);
+        }
     }
 }
 
@@ -902,7 +971,9 @@ function detectHover() {
             continue;
         }
         const wasHovered = obj.isHovered;
-        obj.isHovered = isPointInHitbox(obj, mousePosition.x, mousePosition.y);
+        obj.isHovered = obj.hud
+            ? isPointInHitbox(obj, screenMouseX, screenMouseY)
+            : isPointInHitbox(obj, mousePosition.x, mousePosition.y);
         if (buttonDebugLevel >= 10) {
             const hit = obj.isHovered;
             const left = obj.x + obj.hitboxXOffset - obj.hitboxWidth / 2;
