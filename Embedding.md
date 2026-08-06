@@ -180,6 +180,9 @@ removes game objects and resets the camera.
 | `setBoardPanEnabled(enabled)` | function | Allow left-click/touch drag on empty space to pan the viewport (default `false`). Opt-in. Caller should also disable `setCameraFollowsPlayer`. |
 | `setBoardPanRate(rate)` | function | Pan speed multiplier (default `1.0` = 1:1 grip). `0.5` = slow, `2.0` = fast. |
 | `isBoardPanning()` | function | Returns `boolean` — is the board currently being dragged? |
+| `setZoomEnabled(enabled, min?, max?, step?)` | function | Enable mouse-wheel and pinch-to-zoom (default `false`). `min`/`max`/`step` default to `0.5`/`3.0`/`0.1`. Disabling resets to 1×. |
+| `setZoomLevel(level)` | function | Programmatic zoom (clamped to min/max). `1.0` = native. |
+| `getZoomLevel()` | function | Returns current zoom factor (`number`). |
 | `setBackground(tiles, whenLoaded?)` | function | Set background from image URLs. |
 | `setBackgroundMode(mode)` | function | `"tile"` (default, scrolls with camera) or `"stretch"` (fills viewport, no scroll). |
 | `setBackgroundTileSize(width, height)` | function | Tile size in board coordinates for tiled backgrounds. Both dimensions required; images scaled to fit. Tile mode only. |

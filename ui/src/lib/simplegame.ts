@@ -74,6 +74,20 @@ let boardPanRate: number = 1.0;
 let boardPanSuppressClick: boolean = false;
 let boardPanCursorOriginal: string = '';
 
+// Zoom
+let zoomEnabled: boolean = false;
+let zoomLevel: number = 1.0;
+let zoomMin: number = 0.5;
+let zoomMax: number = 3.0;
+let zoomStep: number = 0.1;
+let nominalWindowWidth: number = 1000;
+let nominalWindowHeight: number = 1000;
+let pinchActive: boolean = false;
+let pinchStartDistance: number = 0;
+let pinchStartZoomLevel: number = 1.0;
+let pinchMidFracX: number = 0;
+let pinchMidFracY: number = 0;
+
 let stillNeedInitialMouseClick : boolean = true;
 
 let cameraFollowsPlayer : boolean = true;
@@ -245,6 +259,8 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
     canvas = screenCanvas;
     windowWidth = canvas.width;
     windowHeight = canvas.height;
+    nominalWindowWidth = canvas.width;
+    nominalWindowHeight = canvas.height;
     attachEventListeners();
 
     if (!clickToBegin) {
@@ -278,6 +294,7 @@ export function attachEventListeners() {
     canvas.addEventListener('touchstart', eventHandlerTouchStart, { passive: false });
     canvas.addEventListener('touchmove', eventHandlerTouchMove, { passive: false });
     canvas.addEventListener('touchend', eventHandlerTouchEnd, { passive: false });
+    canvas.addEventListener('wheel', eventHandlerWheel, { passive: false });
     canvas.focus();
 }
 
@@ -294,6 +311,7 @@ export function removeEventListeners() {
     canvas.removeEventListener('touchstart', eventHandlerTouchStart);
     canvas.removeEventListener('touchmove', eventHandlerTouchMove);
     canvas.removeEventListener('touchend', eventHandlerTouchEnd);
+    canvas.removeEventListener('wheel', eventHandlerWheel);
 }
 
 /**
@@ -438,6 +456,35 @@ function eventHandlerMouseUp(event : MouseEvent) {
  * Only the first touch (changedTouches[0]) is tracked.
  */
 function eventHandlerTouchStart(event: TouchEvent): void {
+    if (zoomEnabled && event.touches.length === 2) {
+        if (dragCandidate) {
+            const synth = new MouseEvent('mouseup', { clientX: 0, clientY: 0, button: 0, buttons: 0 });
+            canvas.dispatchEvent(synth);
+        }
+        if (mouseOwner.has(0)) {
+            const rect = canvas.getBoundingClientRect();
+            const bx = windowWidth * 0.5 + windowX;
+            const by = windowHeight * 0.5 + windowY;
+            const synth = new MouseEvent('mouseup', { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, buttons: 0 });
+            canvas.dispatchEvent(synth);
+        }
+        if (boardPanning) {
+            boardPanning = false;
+            canvas.style.cursor = boardPanCursorOriginal;
+            boardPanSuppressClick = false;
+        }
+        pinchActive = true;
+        const t0 = event.touches[0];
+        const t1 = event.touches[1];
+        pinchStartDistance = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        pinchStartZoomLevel = zoomLevel;
+        const rect = canvas.getBoundingClientRect();
+        pinchMidFracX = ((t0.clientX + t1.clientX) / 2 - rect.left) / canvas.clientWidth;
+        pinchMidFracY = ((t0.clientY + t1.clientY) / 2 - rect.top) / canvas.clientHeight;
+        event.preventDefault();
+        return;
+    }
+    if (pinchActive) return;
     event.preventDefault();
     const touch = event.changedTouches[0];
     canvas.dispatchEvent(new MouseEvent('mousedown', {
@@ -449,6 +496,34 @@ function eventHandlerTouchStart(event: TouchEvent): void {
 }
 
 function eventHandlerTouchMove(event: TouchEvent): void {
+    if (pinchActive) {
+        event.preventDefault();
+        if (event.touches.length >= 2) {
+            const t0 = event.touches[0];
+            const t1 = event.touches[1];
+            const currentDistance = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+            const ratio = currentDistance / pinchStartDistance;
+            const newZoom = Math.max(zoomMin, Math.min(zoomMax, pinchStartZoomLevel * ratio));
+            if (newZoom === zoomLevel) return;
+
+            const oldWindowWidth = windowWidth;
+            const oldWindowHeight = windowHeight;
+
+            windowWidth = nominalWindowWidth / newZoom;
+            windowHeight = nominalWindowHeight / newZoom;
+
+            windowX = windowX + (oldWindowWidth - windowWidth) * pinchMidFracX;
+            windowY = windowY + (oldWindowHeight - windowHeight) * pinchMidFracY;
+            windowX = Math.max(0, Math.min(boardWidth - windowWidth, windowX));
+            windowY = Math.max(0, Math.min(boardHeight - windowHeight, windowY));
+
+            zoomLevel = newZoom;
+            const rect = canvas.getBoundingClientRect();
+            mousePosition.x = windowWidth * ((t0.clientX + t1.clientX) / 2 - rect.left) / canvas.clientWidth + windowX;
+            mousePosition.y = windowHeight * ((t0.clientY + t1.clientY) / 2 - rect.top) / canvas.clientHeight + windowY;
+        }
+        return;
+    }
     event.preventDefault();
     const touch = event.changedTouches[0];
     canvas.dispatchEvent(new MouseEvent('mousemove', {
@@ -459,6 +534,13 @@ function eventHandlerTouchMove(event: TouchEvent): void {
 }
 
 function eventHandlerTouchEnd(event: TouchEvent): void {
+    if (pinchActive) {
+        if (event.touches.length < 2) {
+            pinchActive = false;
+            boardPanSuppressClick = false;
+        }
+        return;
+    }
     event.preventDefault();
     const touch = event.changedTouches[0];
     canvas.dispatchEvent(new MouseEvent('mouseup', {
@@ -467,6 +549,34 @@ function eventHandlerTouchEnd(event: TouchEvent): void {
         button: 0,
         buttons: 0,
     }));
+}
+
+function eventHandlerWheel(event: WheelEvent): void {
+    if (!zoomEnabled) return;
+    event.preventDefault();
+
+    const rect = canvas.getBoundingClientRect();
+    const fracX = (event.clientX - rect.left) / canvas.clientWidth;
+    const fracY = (event.clientY - rect.top) / canvas.clientHeight;
+
+    const delta = event.deltaY > 0 ? -zoomStep : zoomStep;
+    const newZoom = Math.max(zoomMin, Math.min(zoomMax, zoomLevel + delta));
+    if (newZoom === zoomLevel) return;
+
+    const oldWindowWidth = windowWidth;
+    const oldWindowHeight = windowHeight;
+
+    windowWidth = nominalWindowWidth / newZoom;
+    windowHeight = nominalWindowHeight / newZoom;
+
+    windowX = windowX + (oldWindowWidth - windowWidth) * fracX;
+    windowY = windowY + (oldWindowHeight - windowHeight) * fracY;
+    windowX = Math.max(0, Math.min(boardWidth - windowWidth, windowX));
+    windowY = Math.max(0, Math.min(boardHeight - windowHeight, windowY));
+
+    zoomLevel = newZoom;
+    mousePosition.x = windowWidth * fracX + windowX;
+    mousePosition.y = windowHeight * fracY + windowY;
 }
 
 function eventHandlerKeyDown(event : KeyboardEvent) {
@@ -612,10 +722,15 @@ function draw() {
     ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    if (zoomEnabled) {
+        ctx.save();
+        ctx.scale(zoomLevel, zoomLevel);
+    }
+
     /* Background */
     if(backgroundTileset.length > 0) {
         if(backgroundMode === "stretch") {
-            ctx.drawImage(backgroundTileset[0], 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(backgroundTileset[0], 0, 0, windowWidth, windowHeight);
         } else {
             const customW = backgroundTileWidth;
             const customH = backgroundTileHeight;
@@ -649,6 +764,10 @@ function draw() {
     /* After-draw hooks (overlays, etc.) */
     for(const work of afterDrawWork) {
         work(ctx, windowX, windowY);
+    }
+
+    if (zoomEnabled) {
+        ctx.restore();
     }
 }
 
@@ -1001,6 +1120,54 @@ export function isBoardPanning(): boolean {
 }
 
 /**
+ * Enables or disables zoom (mouse wheel and touch pinch).
+ * When disabled the viewport resets to 1× zoom.
+ *
+ * @param enabled - `true` to enable zoom, `false` (default) to disable
+ * @param min     - Minimum zoom level (default `0.5`)
+ * @param max     - Maximum zoom level (default `3.0`)
+ * @param step    - Zoom increment per wheel notch (default `0.1`)
+ * @example
+ *   setZoomEnabled(true, 0.25, 4.0);
+ */
+export function setZoomEnabled(enabled: boolean, min: number = 0.5, max: number = 3.0, step: number = 0.1): void {
+    zoomEnabled = enabled;
+    zoomMin = min;
+    zoomMax = max;
+    zoomStep = step;
+    if (!enabled) {
+        windowWidth = nominalWindowWidth;
+        windowHeight = nominalWindowHeight;
+        zoomLevel = 1.0;
+        pinchActive = false;
+    }
+}
+
+/**
+ * Sets the zoom level programmatically (clamped to min/max).
+ * Intended for manual zoom controls rather than continuous input.
+ *
+ * @param level - Desired zoom level (1.0 = no zoom)
+ * @example
+ *   setZoomLevel(2.0);  // 2× zoom-in
+ */
+export function setZoomLevel(level: number): void {
+    if (!zoomEnabled) return;
+    zoomLevel = Math.max(zoomMin, Math.min(zoomMax, level));
+    windowWidth = nominalWindowWidth / zoomLevel;
+    windowHeight = nominalWindowHeight / zoomLevel;
+    windowX = Math.max(0, Math.min(boardWidth - windowWidth, windowX));
+    windowY = Math.max(0, Math.min(boardHeight - windowHeight, windowY));
+}
+
+/**
+ * Returns the current zoom factor (1.0 = native, >1 = zoomed in).
+ */
+export function getZoomLevel(): number {
+    return zoomLevel;
+}
+
+/**
  * Sets the tile size in board coordinates for tiled backgrounds.
  * Both width and height must be set; images will be scaled to fit.
  *
@@ -1087,6 +1254,11 @@ export function clear() {
     boardPanSuppressClick = false;
     windowX = 0;
     windowY = 0;
+    if (zoomEnabled) {
+        zoomLevel = 1.0;
+        windowWidth = nominalWindowWidth;
+        windowHeight = nominalWindowHeight;
+    }
 }
 
 /**
@@ -1163,5 +1335,11 @@ export function destroyEngine(): void {
     backgroundTileHeight = null;
     boardPanEnabled = false;
     boardPanRate = 1.0;
+    zoomEnabled = false;
+    zoomLevel = 1.0;
+    zoomMin = 0.5;
+    zoomMax = 3.0;
+    zoomStep = 0.1;
+    pinchActive = false;
     canvas.style.cursor = '';
 }
