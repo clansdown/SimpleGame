@@ -1,5 +1,5 @@
 import { gameObjects, enemies, collisionActions, CollisionAction, boardWidth, boardHeight, players, projectiles, items } from "./simplegame";
-import type { Position2D, vec2 } from "./util";
+import { dotProduct, type Position2D, type vec2 } from "./util";
 
 /**
  * Options for circular/orbital movement via GameObject.circleAround().
@@ -42,6 +42,9 @@ import type { Position2D, vec2 } from "./util";
  *   over arcRad. Omit for indefinite orbit.
  * @param direction - 1 = clockwise (default), -1 = counter-clockwise.
  *   Affects which way the arc is swept.
+ * @param worldUp - Preferred world-space up direction during the orbit.
+ *   Used by `"head-up"` and `"transform"` sprite alignment modes; ignored
+ *   by `"rotate"`. Defaults to radially outward from the centre.
  * @param onComplete - Called once after the arc is fully traversed.
  *   The object is snapped to the exact final position before the
  *   callback fires.
@@ -74,6 +77,105 @@ export type DamageSpriteDef = {
     loaded: boolean;
 };
 
+/**
+ * Determines how a sprite's local image frame is mapped onto its world-space
+ * facing direction.
+ *
+ * - `"head-up"` — rotation plus optional reflection. `worldUpVector` selects
+ *   the reflection parity, stabilised by hysteresis. Shape-preserving.
+ * - `"rotate"` — pure rotation based only on `spriteForwardVector`.
+ *   `spriteUpVector` and `worldUpVector` are ignored. Shape-preserving.
+ * - `"transform"` — legacy independent-axis mapping of forward and up. May
+ *   shear and non-uniformly scale the sprite. This is an opt-in effects mode.
+ */
+export type SpriteAlignmentMode = "head-up" | "rotate" | "transform";
+
+/** Default half-width, in degrees, of the `"head-up"` reflection deadband. */
+const DEFAULT_SPRITE_REFLECTION_HYSTERESIS_DEG: number = 6;
+
+/**
+ * Returns the signed rotation angle that maps a sprite's forward vector onto
+ * the object's facing direction.
+ *
+ * The angle uses canvas/screen coordinates and is suitable for
+ * `CanvasRenderingContext2D.rotate()`.
+ *
+ * @param forward - The raw sprite image's forward direction
+ * @param facingX - X component of the object's world-space facing direction
+ * @param facingY - Y component of the object's world-space facing direction
+ * @returns The rotation angle in radians, or 0 when the forward vector is
+ *   zero-length or invalid
+ */
+function computeSpriteRotationAngle(
+    forward: vec2,
+    facingX: number,
+    facingY: number
+): number {
+    const forwardLengthSquared =
+        forward[0] * forward[0] + forward[1] * forward[1];
+
+    if (!Number.isFinite(forwardLengthSquared) || forwardLengthSquared < 0.000001) {
+        return 0;
+    }
+
+    return Math.atan2(
+        forward[0] * facingY - forward[1] * facingX,
+        forward[0] * facingX + forward[1] * facingY
+    );
+}
+
+/**
+ * Rotates a 2D vector by the given angle using the standard canvas rotation
+ * matrix.
+ *
+ * @param vector - The vector to rotate
+ * @param angleRadians - Rotation angle in radians
+ * @returns A new rotated vector
+ */
+function rotateVec2(vector: vec2, angleRadians: number): vec2 {
+    const cos = Math.cos(angleRadians);
+    const sin = Math.sin(angleRadians);
+    return [
+        vector[0] * cos - vector[1] * sin,
+        vector[0] * sin + vector[1] * cos
+    ];
+}
+
+/**
+ * Converts a reflection-hysteresis half-width in degrees to the equivalent
+ * cosine margin used by the dot-product alignment test.
+ *
+ * Values are clamped to 0..89.9 degrees so the reflection state cannot become
+ * permanently locked. Non-finite values fall back to the engine default.
+ *
+ * @param hysteresisDeg - Half-width of the reflection deadband in degrees
+ * @returns The cosine margin, in the range 0..~0.999998
+ */
+function computeReflectionCosineMargin(hysteresisDeg: number): number {
+    if (!Number.isFinite(hysteresisDeg)) {
+        return Math.sin(
+            DEFAULT_SPRITE_REFLECTION_HYSTERESIS_DEG * Math.PI / 180
+        );
+    }
+
+    const clampedDegrees = Math.max(0, Math.min(89.9, hysteresisDeg));
+    return Math.sin(clampedDegrees * Math.PI / 180);
+}
+
+/**
+ * Reports whether a vector has finite components and a usable magnitude.
+ *
+ * @param vector - The vector to validate
+ * @returns True when the vector is finite and non-zero
+ */
+function isValidVector(vector: vec2): boolean {
+    if (!Number.isFinite(vector[0]) || !Number.isFinite(vector[1])) {
+        return false;
+    }
+
+    return vector[0] * vector[0] + vector[1] * vector[1] > 0.000001;
+}
+
 export const gameClasses : GameObjectClass[] = [];
 
 export class GameObjectClass {
@@ -90,8 +192,12 @@ export class GameObjectClass {
     defaultHitpoints : number = 1;
     /** The direction the raw sprite image faces. [0, -1] = up, [1, 0] = right, etc. Inherited by all spawned instances. */
     defaultSpriteForwardVector: vec2 = [0, -1];
-    /** The "up" direction of the raw sprite image perpendicular to the forward vector. Used by the mirror-on-direction system to compute the correct mirroring axis. Defaults to perp_cw(forwardVector) = [-1, 0] for [0, -1] (left = up in screen space). */
+    /** The "up" direction of the raw sprite image. Used for reflection parity in `"head-up"` mode and as an independent axis in `"transform"` mode. Defaults to [-1, 0] for the default forward vector. */
     defaultSpriteUpVector: vec2 = [-1, 0];
+    /** Default sprite alignment mode for spawned instances. */
+    defaultSpriteAlignmentMode: SpriteAlignmentMode = "head-up";
+    /** Default reflection hysteresis half-width in degrees for spawned instances. */
+    defaultSpriteReflectionHysteresisDeg: number = DEFAULT_SPRITE_REFLECTION_HYSTERESIS_DEG;
     /** Default value for singleCollisionOnly on spawned instances */
     defaultSingleCollisionOnly: boolean = false;
 
@@ -290,12 +396,16 @@ export class GameObject {
     /** The y component of the orientation, to make movement computation more efficient */
     direction_y : number = -1;
 
-    /** The direction the raw sprite image faces. Inherited from class defaultSpriteForwardVector at spawn. [0, -1] = up, [1, 0] = right, etc. */
+    /** The direction the raw sprite image faces. Inherited from class defaultSpriteForwardVector at spawn. [0, -1] = up, [1, 0] = right, etc. Drives rotation in every alignment mode. */
     spriteForwardVector: vec2 = [0, -1];
-    /** The "up" direction of this instance's sprite image. Together with spriteForwardVector this forms a local frame that the engine maps to the world-space facing and screen up on every draw. Copied from class defaultSpriteUpVector at spawn. */
+    /** The "up" direction of this instance's sprite image. Used for reflection parity in `"head-up"` mode and as an independent axis in `"transform"` mode; ignored by `"rotate"`. Copied from class defaultSpriteUpVector at spawn. */
     spriteUpVector: vec2 = [-1, 0];
-    /** The world-space "up" direction for this object.  Movement functions set this to tell the draw() matrix where the character's head should point on screen.  Default [0, -1] = screen-up.  Override for ceiling-walking ([0, 1]), wall-clinging, etc. */
+    /** The world-space "up" direction for this object. In `"head-up"` mode it selects reflection parity; in `"transform"` mode it is the independent target for spriteUpVector; ignored by `"rotate"`. Movement functions set it automatically. Default [0, -1] = screen-up. */
     worldUpVector: vec2 = [0, -1];
+    /** Per-instance sprite alignment mode. Copied from class defaultSpriteAlignmentMode at spawn. */
+    spriteAlignmentMode: SpriteAlignmentMode = "head-up";
+    /** Half-width in degrees of the reflection deadband used by `"head-up"` mode. 0 = flip immediately; larger values make the current reflection state stickier. Clamped to 0..89.9 when used. Copied from class defaultSpriteReflectionHysteresisDeg at spawn. */
+    spriteReflectionHysteresisDeg: number = DEFAULT_SPRITE_REFLECTION_HYSTERESIS_DEG;
     /** If true, stops collision detection for this object after the first hit per frame. Inherited from class defaultSingleCollisionOnly. */
     singleCollisionOnly: boolean = false;
 
@@ -367,6 +477,13 @@ export class GameObject {
     private progressBarOpacity: number = 1.0;
     private progressBarHeight: number = 6;
 
+    /** Whether the current `"head-up"` transform is reflected across the forward axis. */
+    private spriteReflectionFlipped: boolean = false;
+    /** Whether spriteReflectionFlipped has been initialised from a real alignment sample. */
+    private spriteReflectionInitialized: boolean = false;
+    /** Alignment mode used on the previous draw, for automatic reflection-state reset. */
+    private lastSpriteAlignmentModeUsed: SpriteAlignmentMode | null = null;
+
     gameclass : GameObjectClass;
 
     isHovered: boolean = false;
@@ -426,6 +543,9 @@ export class GameObject {
         this.speed = gameclass.defaultSpeed;
         this.spriteForwardVector = [...gameclass.defaultSpriteForwardVector];
         this.spriteUpVector = [...gameclass.defaultSpriteUpVector];
+        this.spriteAlignmentMode = gameclass.defaultSpriteAlignmentMode;
+        this.spriteReflectionHysteresisDeg =
+            gameclass.defaultSpriteReflectionHysteresisDeg;
         this.singleCollisionOnly = gameclass.defaultSingleCollisionOnly;
     }
 
@@ -585,9 +705,11 @@ export class GameObject {
      *
      * @param position - The target position to move to
      * @param time - The time in seconds to complete the movement
-     * @param up - Optional world-space up direction for the object during this
-     *   movement.  Overrides {@link worldUpVector} (default [0, -1] = screen up).
-     *   Use [0, 1] for ceiling-walking, [1, 0] for wall-clinging on a right wall, etc.
+     * @param up - Optional preferred world-space up direction for the object
+     *   during this movement. Overrides {@link worldUpVector} (default
+     *   [0, -1] = screen up). Used by `"head-up"` and `"transform"` alignment
+     *   modes; ignored by `"rotate"`. Use [0, 1] for ceiling-walking, [1, 0]
+     *   for wall-clinging on a right wall, etc.
      * @example
      *   enemy.moveTo({x: 1000, y: 500}, 3.0); // Moves to position over 3 seconds
      *   player.moveTo({x: 500, y: 0}, 2.0, [0, 1]); // Ceiling walk
@@ -967,6 +1089,150 @@ export class GameObject {
     }
 
     /**
+     * Clears the stored `"head-up"` reflection parity so the next draw chooses
+     * it afresh from the current facing and world-up vectors.
+     *
+     * Call this after teleporting an object, changing its sprite art, or
+     * changing `worldUpVector` discontinuously when the previous reflection
+     * state should not carry over.
+     */
+    resetSpriteReflectionState(): void {
+        this.spriteReflectionFlipped = false;
+        this.spriteReflectionInitialized = false;
+        this.lastSpriteAlignmentModeUsed = null;
+    }
+
+    /**
+     * Resets the stored reflection state when the alignment mode has changed.
+     * This prevents a stale mirror state from carrying between modes.
+     */
+    private resetSpriteReflectionStateIfModeChanged(): void {
+        if (this.lastSpriteAlignmentModeUsed !== this.spriteAlignmentMode) {
+            this.resetSpriteReflectionState();
+            this.lastSpriteAlignmentModeUsed = this.spriteAlignmentMode;
+        }
+    }
+
+    /**
+     * Updates and returns the reflection parity used by `"head-up"` mode.
+     *
+     * The method compares the sprite's rotated up vector with the desired
+     * world-up vector using a cosine margin derived from
+     * `spriteReflectionHysteresisDeg`. If the vectors are invalid, reflection
+     * is disabled and the mode degrades to pure rotation.
+     *
+     * @param rotatedUp - The sprite up vector after the facing rotation
+     * @param worldUp - The object's desired world-space up direction
+     * @returns True when the sprite should be reflected across its forward axis
+     */
+    private updateSpriteReflection(rotatedUp: vec2, worldUp: vec2): boolean {
+        if (!isValidVector(rotatedUp) || !isValidVector(worldUp)) {
+            this.spriteReflectionFlipped = false;
+            this.spriteReflectionInitialized = false;
+            return false;
+        }
+
+        const rotatedUpLengthSquared =
+            rotatedUp[0] * rotatedUp[0] + rotatedUp[1] * rotatedUp[1];
+        const worldUpLengthSquared =
+            worldUp[0] * worldUp[0] + worldUp[1] * worldUp[1];
+        const alignment =
+            dotProduct(rotatedUp, worldUp) /
+            Math.sqrt(rotatedUpLengthSquared * worldUpLengthSquared);
+
+        if (!this.spriteReflectionInitialized) {
+            this.spriteReflectionFlipped = alignment < 0;
+            this.spriteReflectionInitialized = true;
+            return this.spriteReflectionFlipped;
+        }
+
+        const margin = computeReflectionCosineMargin(
+            this.spriteReflectionHysteresisDeg
+        );
+
+        if (!this.spriteReflectionFlipped && alignment < -margin) {
+            this.spriteReflectionFlipped = true;
+        } else if (this.spriteReflectionFlipped && alignment > margin) {
+            this.spriteReflectionFlipped = false;
+        }
+
+        return this.spriteReflectionFlipped;
+    }
+
+    /**
+     * Applies the selected sprite-alignment transform to the canvas context.
+     *
+     * Shape-preserving modes (`"head-up"` and `"rotate"`) use only rotation
+     * and optional reflection. `"transform"` keeps the legacy independent-axis
+     * mapping, which can shear and non-uniformly scale the sprite.
+     *
+     * @param ctx - The canvas context, already translated to the object origin
+     */
+    private applySpriteAlignmentTransform(ctx: CanvasRenderingContext2D): void {
+        this.resetSpriteReflectionStateIfModeChanged();
+
+        const facingX = Math.sin(this.orientation);
+        const facingY = -Math.cos(this.orientation);
+
+        if (this.spriteAlignmentMode === "transform") {
+            const fwd = this.spriteForwardVector;
+            const up = this.spriteUpVector;
+            const wx = this.worldUpVector[0];
+            const wy = this.worldUpVector[1];
+
+            const det = fwd[0] * up[1] - fwd[1] * up[0];
+            const worldUpInvalid =
+                isNaN(wx) || isNaN(wy) || (wx === 0 && wy === 0);
+            // If facing and worldUp are (anti)parallel the matrix rows are dependent.
+            const facingCrossWorldUp = Math.abs(facingX * wy - facingY * wx);
+
+            if (Math.abs(det) < 0.001 || worldUpInvalid || facingCrossWorldUp < 0.001) {
+                // Sprite frame is degenerate, world-up is invalid, or facing
+                // and world-up are (anti)parallel — fall back to a simple
+                // rotation so the sprite at least faces the right direction.
+                ctx.rotate(
+                    computeSpriteRotationAngle(fwd, facingX, facingY)
+                );
+            } else {
+                // M is the 2×2 matrix that maps the sprite's forward vector
+                // to the facing direction and the sprite's up vector to the
+                // object's worldUpVector.
+                //
+                //   M · fwd  = (facingX, facingY)
+                //   M · up   = (wx, wy)
+                //
+                // Solved via Cramer's rule. This is the legacy opt-in mode and
+                // may shear or non-uniformly scale the sprite.
+                ctx.transform(
+                    (facingX * up[1] - wx * fwd[1]) / det,
+                    (facingY * up[1] - wy * fwd[1]) / det,
+                    (fwd[0] * wx - up[0] * facingX) / det,
+                    (fwd[0] * wy - up[0] * facingY) / det,
+                    0, 0
+                );
+            }
+            return;
+        }
+
+        const rotationAngle = computeSpriteRotationAngle(
+            this.spriteForwardVector,
+            facingX,
+            facingY
+        );
+        ctx.rotate(rotationAngle);
+
+        if (this.spriteAlignmentMode !== "rotate") {
+            const rotatedUp = rotateVec2(this.spriteUpVector, rotationAngle);
+            if (this.updateSpriteReflection(rotatedUp, this.worldUpVector)) {
+                // Reflect across the local forward axis. This leaves the
+                // facing direction unchanged and only flips which side of the
+                // sprite is considered up.
+                ctx.scale(1, -1);
+            }
+        }
+    }
+
+    /**
      * Internal function to handle drawing
      */
     draw(ctx : CanvasRenderingContext2D, offsetX : number, offsetY : number) {
@@ -974,47 +1240,8 @@ export class GameObject {
         /* Put it in the right place */
         ctx.translate(this.x - offsetX, this.y - offsetY);
 
-        /* Align sprite forward vector with facing direction */
-        {
-            const fwd = this.spriteForwardVector;
-            const up = this.spriteUpVector;
-            const wx = this.worldUpVector[0];
-            const wy = this.worldUpVector[1];
-            const sx = Math.sin(this.orientation);
-            const sy = -Math.cos(this.orientation);
-
-            const det = fwd[0] * up[1] - fwd[1] * up[0];
-            const worldUpInvalid = isNaN(wx) || isNaN(wy) || (wx === 0 && wy === 0);
-            // If facing and worldUp are (anti)parallel the matrix rows are dependent
-            const facingCrossWorldUp = Math.abs(sx * wy - sy * wx);
-
-            if (Math.abs(det) < 0.001 || worldUpInvalid || facingCrossWorldUp < 0.001) {
-                // Sprite frame is degenerate, world-up is invalid, or facing
-                // and world-up are (anti)parallel — fall back to a simple
-                // rotation so the sprite at least faces the right direction.
-                const rawAngle = Math.atan2(
-                    fwd[0] * sy - fwd[1] * sx,
-                    fwd[0] * sx + fwd[1] * sy
-                );
-                ctx.rotate(rawAngle);
-            } else {
-                // M is the 2×2 matrix that maps the sprite's forward vector
-                // to the facing direction and the sprite's up vector to the
-                // object's worldUpVector.
-                //
-                //   M · fwd  = (sx, sy)   (= facing direction)
-                //   M · up   = (wx, wy)   (= worldUpVector)
-                //
-                // Solved via Cramer's rule.
-                ctx.transform(
-                    (sx * up[1] - wx * fwd[1]) / det,
-                    (sy * up[1] - wy * fwd[1]) / det,
-                    (fwd[0] * wx - up[0] * sx) / det,
-                    (fwd[0] * wy - up[0] * sy) / det,
-                    0, 0
-                );
-            }
-        }
+        /* Align the sprite's local frame with its world-space facing */
+        this.applySpriteAlignmentTransform(ctx);
 
         /* Grow In */
         if(this.growInMillis > 0 && this.timeExistedMillis < this.growInMillis) {

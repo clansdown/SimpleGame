@@ -24,6 +24,20 @@ export interface ButtonOptions {
     foregroundColor?: string;
 }
 
+export interface ToggleButtonOptions extends ButtonOptions {
+    toggled?: boolean;
+    onColor?: string;
+    offColor?: string;
+    onForegroundColor?: string;
+    offForegroundColor?: string;
+    onText?: string;
+    offText?: string;
+    onIcon?: string;
+    offIcon?: string;
+    onBorderHighlight?: boolean;
+    onBorderHighlightColor?: string;
+}
+
 export class ButtonClass extends GameObjectClass {
     constructor(name: string, image_file: string | null = null, parent: GameObjectClass | null = null) {
         super(name, image_file, parent);
@@ -32,6 +46,19 @@ export class ButtonClass extends GameObjectClass {
     spawn(x: number, y: number, text?: string | null, iconFile?: string | null,
           options?: ButtonOptions): Button {
         const button = new Button(this, x, y, text, iconFile, options);
+        this.spawned(button);
+        return button;
+    }
+}
+
+export class ToggleButtonClass extends ButtonClass {
+    constructor(name: string, image_file: string | null = null, parent: GameObjectClass | null = null) {
+        super(name, image_file, parent);
+    }
+
+    spawn(x: number, y: number, text?: string | null, iconFile?: string | null,
+          options?: ToggleButtonOptions): ToggleButton {
+        const button = new ToggleButton(this, x, y, text, iconFile, options);
         this.spawned(button);
         return button;
     }
@@ -518,5 +545,240 @@ export class Button extends GameObject {
         }
 
         ctx.restore();
+    }
+}
+
+function deriveHoverClick(color: string): { hover: string; click: string } {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return {
+        hover: `#${Math.min(255, r + 32).toString(16).padStart(2, '0')}${Math.min(255, g + 32).toString(16).padStart(2, '0')}${Math.min(255, b + 32).toString(16).padStart(2, '0')}`,
+        click: `#${Math.max(0, r - 32).toString(16).padStart(2, '0')}${Math.max(0, g - 32).toString(16).padStart(2, '0')}${Math.max(0, b - 32).toString(16).padStart(2, '0')}`,
+    };
+}
+
+export class ToggleButton extends Button {
+    toggled: boolean = false;
+
+    onColor: string;
+    offColor: string;
+    onHoverColor: string;
+    offHoverColor: string;
+    onClickColor: string;
+    offClickColor: string;
+    onForegroundColor: string;
+    offForegroundColor: string;
+    onText?: string;
+    offText?: string;
+    onIcon?: HTMLImageElement;
+    offIcon?: HTMLImageElement;
+    onBorderHighlight: boolean;
+    onBorderHighlightColor: string;
+
+    onToggleOnCallback?: () => void;
+    onToggleOffCallback?: () => void;
+
+    private _baseText: string;
+    private _baseIcon?: HTMLImageElement;
+
+    constructor(gameclass: ToggleButtonClass, x: number, y: number, text?: string | null,
+                iconFile?: string | null, options?: ToggleButtonOptions) {
+        super(gameclass, x, y, text, iconFile, options);
+
+        this._baseText = this.text;
+        this._baseIcon = this.icon;
+
+        const opts: ToggleButtonOptions = options ?? {};
+
+        const onCol = opts.onColor ?? "#4060A0";
+        this.onColor = onCol;
+        const onHC = deriveHoverClick(onCol);
+        this.onHoverColor = onHC.hover;
+        this.onClickColor = onHC.click;
+
+        const offCol = opts.offColor ?? "#707088";
+        this.offColor = offCol;
+        const offHC = deriveHoverClick(offCol);
+        this.offHoverColor = offHC.hover;
+        this.offClickColor = offHC.click;
+
+        this.onForegroundColor = opts.onForegroundColor ?? "#000000";
+        this.offForegroundColor = opts.offForegroundColor ?? "#000000";
+
+        if (opts.onText != null) this.onText = opts.onText;
+        if (opts.offText != null) this.offText = opts.offText;
+
+        if (opts.onIcon) {
+            const img = new Image();
+            img.onerror = () => { img.src = TRANSPARENT_GIF; };
+            img.src = opts.onIcon;
+            this.onIcon = img;
+        }
+        if (opts.offIcon) {
+            const img = new Image();
+            img.onerror = () => { img.src = TRANSPARENT_GIF; };
+            img.src = opts.offIcon;
+            this.offIcon = img;
+        }
+
+        this.onBorderHighlight = opts.onBorderHighlight ?? true;
+        this.onBorderHighlightColor = opts.onBorderHighlightColor ?? "#60A0F0";
+
+        this.toggled = opts.toggled ?? false;
+        this._syncColors();
+
+        this.onClick(0, () => {
+            if (this.disabled) return;
+            if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this._baseText}": toggle click`);
+            this.isClicked = false;
+            this.toggle();
+        });
+    }
+
+    private _syncColors(): void {
+        if (this.toggled) {
+            this.color = this.onColor;
+            this.hoverColor = this.onHoverColor;
+            this.clickColor = this.onClickColor;
+            this.foregroundColor = this.onForegroundColor;
+            this.text = this.onText ?? this._baseText;
+            this.icon = this.onIcon ?? this._baseIcon;
+        } else {
+            this.color = this.offColor;
+            this.hoverColor = this.offHoverColor;
+            this.clickColor = this.offClickColor;
+            this.foregroundColor = this.offForegroundColor;
+            this.text = this.offText ?? this._baseText;
+            this.icon = this.offIcon ?? this._baseIcon;
+        }
+    }
+
+    /**
+     * Toggles the state (ON ↔ OFF) and fires the appropriate callback.
+     */
+    toggle(): void {
+        this.toggled = !this.toggled;
+        this._syncColors();
+        if (this.toggled && this.onToggleOnCallback) {
+            this.onToggleOnCallback();
+        } else if (!this.toggled && this.onToggleOffCallback) {
+            this.onToggleOffCallback();
+        }
+    }
+
+    /**
+     * Sets the toggle state without firing callbacks.
+     */
+    setToggled(state: boolean): void {
+        if (this.toggled === state) return;
+        this.toggled = state;
+        this._syncColors();
+    }
+
+    setOnToggleOn(callback: () => void): void {
+        this.onToggleOnCallback = callback;
+    }
+
+    setOnToggleOff(callback: () => void): void {
+        this.onToggleOffCallback = callback;
+    }
+
+    setOnColor(color: string): void {
+        this.onColor = color;
+        const hc = deriveHoverClick(color);
+        this.onHoverColor = hc.hover;
+        this.onClickColor = hc.click;
+        if (this.toggled) this._syncColors();
+    }
+
+    setOffColor(color: string): void {
+        this.offColor = color;
+        const hc = deriveHoverClick(color);
+        this.offHoverColor = hc.hover;
+        this.offClickColor = hc.click;
+        if (!this.toggled) this._syncColors();
+    }
+
+    override setBackgroundColor(color: string): void {
+        if (this.toggled) this.setOnColor(color);
+        else this.setOffColor(color);
+    }
+
+    setOnForegroundColor(color: string): void {
+        this.onForegroundColor = color;
+        if (this.toggled) this.foregroundColor = color;
+    }
+
+    setOffForegroundColor(color: string): void {
+        this.offForegroundColor = color;
+        if (!this.toggled) this.foregroundColor = color;
+    }
+
+    override setForegroundColor(color: string): void {
+        if (this.toggled) this.setOnForegroundColor(color);
+        else this.setOffForegroundColor(color);
+    }
+
+    setOnBorderHighlight(on: boolean): void {
+        this.onBorderHighlight = on;
+    }
+
+    setOnText(text: string): void {
+        this.onText = text;
+        if (this.toggled) this._syncColors();
+    }
+
+    setOffText(text: string): void {
+        this.offText = text;
+        if (!this.toggled) this._syncColors();
+    }
+
+    override setText(text: string): void {
+        this._baseText = text;
+        this._syncColors();
+    }
+
+    setOnIcon(iconFile: string): void {
+        const img = new Image();
+        img.onerror = () => { img.src = TRANSPARENT_GIF; };
+        img.src = iconFile;
+        this.onIcon = img;
+        if (this.toggled) this._syncColors();
+    }
+
+    setOffIcon(iconFile: string): void {
+        const img = new Image();
+        img.onerror = () => { img.src = TRANSPARENT_GIF; };
+        img.src = iconFile;
+        this.offIcon = img;
+        if (!this.toggled) this._syncColors();
+    }
+
+    override setIcon(iconFile: string): void {
+        const img = new Image();
+        img.onerror = () => { img.src = TRANSPARENT_GIF; };
+        img.src = iconFile;
+        this._baseIcon = img;
+        this._syncColors();
+    }
+
+    override draw(ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number): void {
+        super.draw(ctx, offsetX, offsetY);
+        if (this.toggled && this.onBorderHighlight) {
+            ctx.save();
+            ctx.translate(this.x - offsetX, this.y - offsetY);
+            ctx.strokeStyle = this.onBorderHighlightColor;
+            ctx.lineWidth = 3;
+            const r = this.cornerRadius;
+            if (r > 0) {
+                ctx.beginPath();
+                ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, r);
+                ctx.stroke();
+            } else {
+                ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
+            }
+            ctx.restore();
+        }
     }
 }

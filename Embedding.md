@@ -60,12 +60,65 @@ board is defined by `boardWidth` × `boardHeight` (set via `setBoardSize()`).
 - The canvas is a **viewport** into the board. The engine draws objects at
   `(object.x - windowX, object.y - windowY)` canvas pixels, where
   `windowX`/`windowY` are the current scroll offset.
-- By default `windowX = windowY = 0` and the canvas is sized to the board,
-  so one board unit equals one canvas pixel. Scrolling the viewport,
-  resizing the canvas, or zooming breaks this 1:1 mapping.
+- By default `windowX = windowY = 0` and the viewport (`windowWidth` ×
+  `windowHeight`) matches the canvas resolution, so one board unit equals
+  one canvas pixel. Scrolling the viewport, resizing the canvas, or zooming
+  breaks this 1:1 mapping.
 
 Board units have no inherent physical scale — you choose what one unit
 represents (e.g., 1 pixel, 1 metre, 1 tile).
+
+---
+
+## Zoom
+
+Zoom changes how much of the board is visible on screen. It is off by default
+and must be enabled explicitly.
+
+```typescript
+import { setZoomEnabled, setZoomLevel, getZoomLevel } from "./lib/simplegame";
+
+setZoomEnabled(true);               // enable wheel + pinch zoom (defaults)
+setZoomEnabled(true, 0.25, 4.0);    // custom min/max zoom
+```
+
+| Function | Description |
+|---|---|
+| `setZoomEnabled(enabled, min?, max?, step?)` | Enable/disable zoom. Defaults: `min=0.5`, `max=3.0`, `step=0.1`. Disabling resets to 1×. |
+| `setZoomLevel(level)` | Set zoom programmatically (clamped to min/max). `1.0` = native. |
+| `getZoomLevel()` | Current zoom factor. |
+
+- **Mouse wheel** zooms toward the cursor — the board point under the cursor stays put.
+- **Touch pinch** zooms toward the midpoint of the two fingers.
+- `setViewportSize(width, height)` sets the base (1×) viewport size and aspect
+  ratio; zoom scales from there.
+
+Call `setCameraFollowsPlayer(false)` if you want manual zoom/pan to persist —
+otherwise the camera may override it on the next tick.
+
+---
+
+## Board Panning
+
+Drag-to-scroll the viewport with the left mouse button (or a single-finger
+touch) on empty board space. Off by default.
+
+```typescript
+import { setBoardPanEnabled, setBoardPanRate, isBoardPanning } from "./lib/simplegame";
+
+setCameraFollowsPlayer(false); // prevent the camera fighting manual panning
+setBoardPanEnabled(true);      // enable drag-to-pan
+setBoardPanRate(1.0);          // 1:1 grip (default); 0.5 = slow, 2.0 = fast
+```
+
+| Function | Description |
+|---|---|
+| `setBoardPanEnabled(enabled)` | Enable/disable panning (default `false`). |
+| `setBoardPanRate(rate)` | Pan speed multiplier (default `1.0`). |
+| `isBoardPanning()` | `true` while the user is actively dragging the board. |
+
+Panning only starts when the click hits empty space — if a game object is
+under the cursor, it receives the click instead.
 
 ---
 
@@ -105,7 +158,7 @@ If you don't pass a setup function, `initEngine` uses the one exported from
 | `periodically(seconds, fn)` | Registers a callback invoked at a fixed interval. |
 | `onPause(fn)` | Fires when the game is paused (`pauseGame()`, `togglePause()`, or p key). |
 | `onResume(fn)` | Fires when the game resumes (`resumeGame()`, `togglePause()`, or p key). |
-| `afterDraw(fn)` | Registers a callback that runs after game objects are drawn each frame. Receives `(ctx, offsetX, offsetY)`. |
+| `afterDraw(fn)` | Registers a callback that runs after board objects are drawn each frame (inside the zoom transform, before HUD objects). Receives `(ctx, offsetX, offsetY)`. |
 
 ---
 
@@ -200,10 +253,10 @@ removes game objects and resets the camera.
 | `togglePause()` | function | Toggle pause state. |
 | `isPaused()` | function | Returns `boolean` — `true` if the game is paused. |
 | `onKeyDown(key, fn)` / `onKeyUp(key, fn)` | function | Keyboard input hooks. |
-| `onMouseClick(button, fn)` | function | **Global** mouse click fallback. Fires when no matching object (by z-order targeting) has an `onClick` handler and mouseup occurs within 600ms of mousedown. For per-object clicks, use `obj.onClick()` instead — see [Z-Order](#z-order) for how the topmost handler-owning object is selected. |
+| `onMouseClick(button, fn)` | function | **Global** mouse click fallback. Fires when no matching object (by z-order targeting) has an `onClick` handler and mouseup occurs within 600ms of mousedown. The handler receives `(event, x, y)` in board coordinates. For per-object clicks, use `obj.onClick()` instead — see [Z-Order](#z-order) for how the topmost handler-owning object is selected. |
 | `onButtonDown(btn, fn)` | function | ⚠️ Not yet implemented — no-op stub. |
 | `onButtonUp(btn, fn)` | function | ⚠️ Not yet implemented — no-op stub. |
-| `afterDraw(fn)` | function | Registers a callback that runs after all game objects are drawn each frame. Receives `(ctx, offsetX, offsetY)`. Useful for overlays. |
+| `afterDraw(fn)` | function | Registers a callback that runs after all board objects are drawn each frame. Receives `(ctx, offsetX, offsetY)` in board coordinates. Runs inside the zoom transform and **before** HUD objects, so HUD elements render on top of `afterDraw` overlays. |
 | `clearAfterDraw()` | function | Clear all registered `afterDraw` callbacks. |
 | `setButtonDebugLevel(level)` | function | Enable `[ButtonDebug]` logs. `0`=off, `1`=events, `10`=per-object geometry. |
 | `collisionActions` | `CollisionAction[]` | Active collision action registry. Read by the engine each frame. |
@@ -219,8 +272,8 @@ removes game objects and resets the camera.
 
 | Export | Kind | Description |
 |---|---|---|
-| `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `addDamageSprite()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
-| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), keyboard (`onKeyDown`/`onKeyUp`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `lockOrientation`, `worldUpVector`, `spriteForwardVector`, `spriteUpVector`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
+| `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`, `defaultSpriteUpVector`, `defaultSpriteAlignmentMode`, `defaultSpriteReflectionHysteresisDeg`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `addDamageSprite()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
+| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `hud`, `lockOrientation`, `worldUpVector`, `spriteForwardVector`, `spriteUpVector`, `spriteAlignmentMode`, `spriteReflectionHysteresisDeg`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
 | `PlayerClass` / `Player` | class | Player-controllable object with keyboard input (`enableArrowKeysMovement`, `enableWasdKeysMovement`). Uses `speed` as max cap, `acceleration` as ramp time, and `x_speed`/`y_speed` for axis movement. Overrides `standardMovement = false`. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
@@ -237,7 +290,7 @@ removes game objects and resets the camera.
 |---|---|
 | `vec2` | `[number, number]` tuple type. |
 | `matrix2` | `[number, number, number, number]` tuple type. |
-| `box2` | Object with `x`, `y`, `width`, `height`. |
+| `box2` | 8-number tuple — four corners `[x1, y1, x2, y2, x3, y3, x4, y4]` (top-left, top-right, bottom-right, bottom-left). |
 | `Position2D` | Object with `x`, `y`. |
 | `generate_rotation_matrix(radians)` | Build a 2×2 rotation matrix. |
 | `scaleVector(v, scale)` | Scale a vector. |
@@ -252,7 +305,7 @@ removes game objects and resets the camera.
 
 | Export | Description |
 |---|---|
-| `Music(url)` | Looping background music. Methods: `setVolume(0–1)`, `setLoop(bool)`, `stop()`, `pause()`. |
+| `Music(url)` | Looping background music (loop enabled by default). Methods: `play()`, `setVolume(0–1)`, `setLoop(bool)`, `stop()`, `pause()`. |
 | `SoundEffect(url)` | One-shot sound effect. Methods: `play()`. |
 
 ### UI (`button.ts`, `layout.ts`)
@@ -260,9 +313,13 @@ removes game objects and resets the camera.
 | Export | Description |
 |---|---|
 | `ButtonClass` / `Button` | Clickable button with text, optional icon & background image. Has built-in hover highlight (`hoverColor`), click press indication (`clickColor`), disabled state (`disabled`), background alpha (`backgroundOpacity`), rounded corners (`cornerRadius`), configurable foreground text colour (`foregroundColor`), tooltip support, and configurable icon layout (`IconLayout`). |
+| `ToggleButtonClass` / `ToggleButton` | Toggle (on/off) button extending `Button`. Two-state with separate colours, text, icons, and callbacks per state. ON state draws a bright border highlight by default. See [ToggleButton API](#togglebutton-api-reference) for full reference. |
 | `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
 | `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`, `cornerRadius`, `foregroundColor`. |
+| `ToggleButtonOptions` | Extends `ButtonOptions`. Adds: `toggled`, `onColor`, `offColor`, `onForegroundColor`, `offForegroundColor`, `onText`, `offText`, `onIcon`, `offIcon`, `onBorderHighlight`, `onBorderHighlightColor`. |
 | `LayoutContainer` | Base class for `Row`, `Column`, `Page`, `ScrollablePage`. Provides `padding`, `gutter`, `borderWidth`/`borderColor`, `setJustify()`, `setAlign()`, `addChild()`/`removeChild()`, `layout()`. |
+| `LayoutJustify` | Enum: `START`, `CENTER`, `END`, `SPACE_BETWEEN`, `SPACE_AROUND`. |
+| `LayoutAlign` | Enum: `START`, `CENTER`, `END`, `STRETCH`. |
 | `Row` | Horizontal layout container (extends `LayoutContainer`). |
 | `Column` | Vertical layout container (extends `LayoutContainer`). |
 | `Page` | Page container with `topRow`, `bottomRow`, `leftColumn`, `rightColumn`, `centerColumn` sub-containers. |
@@ -474,13 +531,58 @@ The `isHovered` boolean is updated every frame for all game objects.
 | `backgroundOpacity` | `number` | `1` | Opacity of the background fill/image (0–1). Multiplied by `opacity` at draw time. |
 | `cornerRadius` | `number` | `0` | Radius for rounded button corners in game units. `0` = square. |
 | `foregroundColor` | `string` | `"#000000"` | Text colour (CSS string). |
-| `backgroundOpacity` | `number` | `1.0` | Alpha for the background layer only (fill, image, border). Icon, text, and disabled overlay unaffected. |
 
 `ButtonOptions` fields: `width`, `height`, `backgroundImage`, `color`,
-`iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`.
+`iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`,
+`cornerRadius`, `foregroundColor`.
 
 Buttons auto-size from content. Set `width`/`height` to override. Minimum
 40×30. `backgroundOpacity` (default 1.0) controls background layer alpha.
+
+### ToggleButton API reference
+
+| Member | Description |
+|--------|-------------|
+| `toggle()` | Flip the state and fire the matching callback. |
+| `setToggled(state)` | Set state (`true`=ON, `false`=OFF) without firing callbacks. |
+| `setOnToggleOn(callback)` | Register callback for ON transition. |
+| `setOnToggleOff(callback)` | Register callback for OFF transition. |
+| `setOnColor(color)` | Set ON-state background colour and re-derive hover/click variants. |
+| `setOffColor(color)` | Set OFF-state background colour and re-derive hover/click variants. |
+| `setOnForegroundColor(color)` | Set ON-state text colour. |
+| `setOffForegroundColor(color)` | Set OFF-state text colour. |
+| `setOnText(text)` | Override label text for ON state. Omit to use base text. |
+| `setOffText(text)` | Override label text for OFF state. Omit to use base text. |
+| `setOnIcon(file)` | Load icon for ON state. Omit to use base icon. |
+| `setOffIcon(file)` | Load icon for OFF state. Omit to use base icon. |
+| `setOnBorderHighlight(on)` | Enable/disable the bright border accent on ON state (default `true`). |
+
+**Settable fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `toggled` | `boolean` | `false` | Current state (`true`=ON, `false`=OFF). Read directly; use `toggle()` or `setToggled()` to change it. |
+| `onColor` | `string` | `"#4060A0"` | ON background colour. |
+| `offColor` | `string` | `"#707088"` | OFF background colour. |
+| `onBorderHighlight` | `boolean` | `true` | Draw a bright 3px border accent in ON state. |
+| `onBorderHighlightColor` | `string` | `"#60A0F0"` | Colour for the ON-state border accent. |
+
+`ToggleButtonOptions` extends `ButtonOptions` with: `toggled`, `onColor`, `offColor`, `onForegroundColor`, `offForegroundColor`, `onText`, `offText`, `onIcon`, `offIcon`, `onBorderHighlight`, `onBorderHighlightColor`.
+
+```typescript
+const toggleBtn = toggleButtonClass.spawn(100, 100, "Music", null, {
+    toggled: true,
+    onColor: "#40A040",
+    offColor: "#804040",
+    onText: "Music: ON",
+    offText: "Music: OFF",
+    onIcon: "icons/sound-on.png",
+    offIcon: "icons/sound-off.png",
+    cornerRadius: 6,
+});
+toggleBtn.setOnToggleOn(() => playMusic());
+toggleBtn.setOnToggleOff(() => stopMusic());
+```
 
 ---
 
@@ -566,6 +668,34 @@ non-overlapping triangles covering the entire region.
 
 ---
 
+## HUD (Screen-Space Objects)
+
+Set `hud = true` on any `GameObject` to position it in canvas-pixel (screen)
+coordinates instead of board coordinates. HUD objects stay fixed on screen
+regardless of camera movement, zoom, or panning.
+
+```typescript
+import { createText } from "./lib/gameclasses";
+
+const healthLabel = createText("HP: 100", { x: 10, y: 10 });
+healthLabel.hud = true;    // (10, 10) is now a screen pixel, not a board unit
+healthLabel.zIndex = 100;  // high z so it sits above board objects
+```
+
+HUD objects:
+
+- Are drawn **after** all board objects (always on top) and after `afterDraw` callbacks.
+- Receive mouse input **before** board objects (highest `zIndex` first).
+- Ignore the zoom transform — they render at native canvas scale.
+- Support the full `GameObject` feature set: mouse events, dragging, opacity,
+  `drawOverlay`, progress bars, tooltips, etc.
+
+> **Note:** HUD objects still run the normal movement system. Avoid
+> `boundToBoard` / `destroyIfOffBoard` on HUD objects — they clamp and destroy
+> against *board* bounds, not screen bounds.
+
+---
+
 ## Dragging
 
 Any `GameObject` can be made draggable. While being dragged, the object's
@@ -608,11 +738,43 @@ set to zero so the engine's movement system doesn't interfere.
 
 ## Sprite Alignment
 
-The engine solves a linear system to map the sprite's local frame
-(`spriteForwardVector` + `spriteUpVector`) to the world-space facing
-direction and the object's `worldUpVector` on every frame.  This handles
-rotation, horizontal mirroring, and any combination automatically — the
-matrix IS the correct orientation for any pair of forward and up vectors.
+Every game object has a local sprite frame:
+
+- `spriteForwardVector` — the direction the raw image faces.
+- `spriteUpVector` — which side of the raw image is its "up" or head side.
+
+The engine maps that local frame onto the object's world-space facing
+direction on every draw. `spriteAlignmentMode` selects how the mapping is
+performed. Only rotation and reflection preserve the sprite's shape; modes
+that try to satisfy two independent axes can shear or non-uniformly scale it.
+
+### Alignment modes
+
+| Mode | Shape preserved | Uses `spriteUpVector` | Uses `worldUpVector` | Typical use |
+|---|---|---|---|---|
+| `"head-up"` (default) | Yes | Yes, for reflection parity | Yes, preferred up | Side-view games, characters that should stay upright where possible |
+| `"rotate"` | Yes | No | No | Top-down games where sprites simply rotate to face movement |
+| `"transform"` | No | Yes, as an independent axis | Yes, as an independent axis | Opt-in legacy/effects mode; can shear and shrink/stretch |
+
+`"head-up"` rotates the sprite to face its movement direction, then optionally
+reflects it across its forward axis so its up side points as close to
+`worldUpVector` as rotation/reflection allow. Reflection parity is stabilised
+by a hysteresis deadband, so near-vertical movement does not rapidly toggle
+between mirror images.
+
+`"rotate"` applies only the rotation that maps `spriteForwardVector` onto the
+facing direction. It never reflects, and it ignores both up vectors. This is
+the usual choice for tower-defence mobs or other top-down art that should spin
+freely.
+
+`"transform"` is the original engine behaviour: it solves a linear system that
+maps forward to the facing direction and up to `worldUpVector`
+simultaneously. It is not a true perspective transform, but because two
+independent axes overconstrain the mapping, it can shear and scale the sprite
+non-uniformly. It is most visible near vertical movement, where the sprite can
+collapse to a few pixels wide. Use it only when that effect is desired.
+
+### Configuring the raw sprite frame
 
 ```typescript
 // On the class (all instances inherit):
@@ -620,30 +782,76 @@ const ratClass = new EnemyClass("dire_rat", "rat.png");
 ratClass.defaultSpriteForwardVector = [1, 0];   // sprite faces right
 ratClass.defaultSpriteUpVector      = [0, -1];  // top of image = head
 
-// On the instance (override per-object):
+// On an instance (override per-object):
 const rat = ratClass.spawn(100, 100);
 rat.spriteForwardVector = [-1, 0];  // this one faces left
-rat.worldUpVector        = [0, 1];  // ceiling walk
+rat.worldUpVector       = [0, 1];   // ceiling walk
 ```
 
-The `worldUpVector` is set automatically by `moveTo` and `circleAround`
-(default screen-up `[0, −1]`, or radially-outward for orbits).  You can
-pass a custom `up` vector to either call for ceiling-walking, wall-
-clinging, or inward-facing orbits.
+### Choosing a mode
 
-When the forward and up vectors are (nearly) parallel — i.e. the sprite
-faces the exact direction its forward already points — the system is
-degenerate and the engine falls back to a simple rotation.
+```typescript
+// Right-facing tower-defence art: default "head-up" keeps it upright
+// when possible and reflects correctly when reversing.
+const mobClass = new EnemyClass("mob", "mob.png");
+mobClass.defaultSpriteForwardVector = [1, 0];
+mobClass.defaultSpriteUpVector      = [0, -1];
+
+// Pure rotation for a top-down game:
+mobClass.defaultSpriteAlignmentMode = "rotate";
+
+// Legacy independent-axis transform (can shear/shrink):
+mobClass.defaultSpriteAlignmentMode = "transform";
+```
+
+### World up direction
+
+The `worldUpVector` is set automatically by `moveTo` and `circleAround`
+(default screen-up `[0, -1]`, or radially outward for orbits). You can pass a
+custom `up` vector to either call for ceiling-walking, wall-clinging, or
+inward-facing orbits.
+
+In `"head-up"` mode, `worldUpVector` is a preference rather than a strict
+second axis. When the facing direction is parallel to `worldUpVector`, no
+rotation/reflection can keep the sprite's head pointing along it; the engine
+chooses one of the two possible sideways orientations. This is expected
+geometry, not a bug. `"rotate"` ignores `worldUpVector` entirely, while
+`"transform"` uses it as the independent target for `spriteUpVector`.
+
+### Reflection hysteresis
+
+`spriteReflectionHysteresisDeg` controls how sticky the `"head-up"` reflection
+state is. It is the half-width of the deadband in degrees around the reflection
+boundary:
+
+- `0` — reflect immediately when the up vectors cross the boundary.
+- `6` (default) — ignore small crossings; roughly a ±6° deadband.
+- Larger values — even stickier, but slower to correct after a sharp turn.
+
+Values are clamped to `0..89.9`. Hysteresis only applies to `"head-up"` mode.
+
+Changing `spriteAlignmentMode` automatically resets the stored reflection
+parity. If you teleport an object, change its art, or set `worldUpVector` to a
+discontinuous new value, call `resetSpriteReflectionState()` so the next draw
+chooses parity afresh.
 
 ### API reference
 
 | Field | Type | Default | Location | Description |
 |---|---|---|---|---|
-| `defaultSpriteForwardVector` | `vec2` | `[0, -1]` | `GameObjectClass` | The direction the raw sprite image faces. Set once after constructing the class. |
+| `defaultSpriteForwardVector` | `vec2` | `[0, -1]` | `GameObjectClass` | The direction the raw sprite image faces. Drives rotation in every mode. |
 | `spriteForwardVector` | `vec2` | inherited from class | `GameObject` | Per-instance override (rarely needed). |
-| `defaultSpriteUpVector` | `vec2` | `[-1, 0]` | `GameObjectClass` | The "up" (head) direction of the raw sprite image. Together with forward this defines the sprite's local frame. |
-| `spriteUpVector` | `vec2` | inherited from class | `GameObject` | Per-instance override of the sprite's head direction. |
-| `worldUpVector` | `vec2` | `[0, -1]` | `GameObject` | Where the character's head should point in world space. Set automatically by movement functions; override for ceiling-walking etc. |
+| `defaultSpriteUpVector` | `vec2` | `[-1, 0]` | `GameObjectClass` | The raw image's up/head direction. Used for reflection parity in `"head-up"` and as an independent axis in `"transform"`. |
+| `spriteUpVector` | `vec2` | inherited from class | `GameObject` | Per-instance override of the sprite's up direction. |
+| `worldUpVector` | `vec2` | `[0, -1]` | `GameObject` | Preferred world-space up direction. Used by `"head-up"` and `"transform"`; ignored by `"rotate"`. Set automatically by movement functions. |
+| `defaultSpriteAlignmentMode` | `SpriteAlignmentMode` | `"head-up"` | `GameObjectClass` | Default alignment mode for spawned instances. |
+| `spriteAlignmentMode` | `SpriteAlignmentMode` | inherited from class | `GameObject` | Per-instance alignment mode: `"head-up"`, `"rotate"`, or `"transform"`. |
+| `defaultSpriteReflectionHysteresisDeg` | `number` | `6` | `GameObjectClass` | Default reflection deadband half-width in degrees for spawned instances. |
+| `spriteReflectionHysteresisDeg` | `number` | inherited from class | `GameObject` | Reflection deadband half-width in degrees for `"head-up"` mode. |
+
+| Method | Description |
+|---|---|
+| `resetSpriteReflectionState()` | Clears the stored `"head-up"` reflection parity so the next draw chooses it afresh. |
 
 ### Orientation helpers
 
@@ -725,8 +933,15 @@ Velocity is calculated to arrive on schedule.
 
 ### World up direction
 
-The third (optional) parameter `up` sets `worldUpVector` — which direction the
-character's head should point in world space. Default is `[0, -1]` (screen up).
+The third (optional) parameter `up` sets `worldUpVector` — the direction the
+character's head should preferably point in world space. Default is `[0, -1]`
+(screen up).
+
+This value only affects alignment modes that use `worldUpVector`:
+
+- `"head-up"` (default) uses it to choose reflection parity.
+- `"transform"` uses it as the independent target for `spriteUpVector`.
+- `"rotate"` ignores it.
 
 ```typescript
 // Ceiling walk: character moves right with head pointing down
@@ -742,6 +957,11 @@ drone.circleAround({
     worldUp: [0, -1],   // head stays at screen top regardless of orbit position
 });
 ```
+
+In `"head-up"` mode, `worldUpVector` is a preference rather than a strict axis.
+When the facing direction is parallel to it, the sprite cannot keep its head
+pointing exactly along `worldUpVector`; rotation and reflection only choose one
+of the two sideways orientations.
 
 ### Deceleration
 
@@ -1214,7 +1434,7 @@ at its current position. Calling `moveTo()` also cancels the orbit
 | `arcRad` | `number` | — | Total arc to sweep in radians. Omit for indefinite orbit. Direction (`+`/`-`) is ignored — use `direction` instead. |
 | `arcDeg` | `number` | — | Total arc to sweep in degrees. Takes precedence over `arcRad`. Omit for indefinite orbit. |
 | `direction` | `number` | `1` | Swing direction: `1` = clockwise (default), `-1` = counter-clockwise. |
-| `worldUp` | `vec2` | `—` | World-space up direction for the orbiting object. Default: radially outward from centre (centrifugal). Pass `[0, -1]` for screen-up always, or a custom vector for wall/ceiling orbits. |
+| `worldUp` | `vec2` | `—` | Preferred world-space up direction for the orbiting object. Used by `"head-up"` and `"transform"` alignment modes; ignored by `"rotate"`. Default: radially outward from centre (centrifugal). Pass `[0, -1]` for screen-up always, or a custom vector for wall/ceiling orbits. |
 | `onComplete` | `() => void` | — | Called once after the arc is fully traversed. The object is snapped to the exact final position before the callback fires. |
 
 ### Methods
@@ -1327,7 +1547,8 @@ page.setCenterColumn(mainContent);
 
 ### ScrollablePage
 
-`ScrollablePage` extends `Page` with vertical scrolling:
+`ScrollablePage` is a full-page container (extends `GameObject`) with vertical
+scrolling:
 
 ```typescript
 const scrollPage = new ScrollablePage(400, 600);
