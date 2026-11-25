@@ -16,6 +16,8 @@ export const items : Set<Item> = new Set();
 
 const tickWork : ((delta_t:number) => void)[] = [];
 const periodicWork : PeriodicWork[] = [];
+const nextTickWork : (() => void)[] = [];
+let dueNextTickWork : (() => void)[] = [];
 
 const keyMap = new Map<string, boolean>();
 const keyMapTimes = new Map<string, number>();
@@ -52,6 +54,8 @@ let lastGameLoopTime : number;
 
 let gameLoopTimeout : number = -1;
 let notAllClassesAreLoaded : boolean = true;
+/** True once the click-to-start screen and asset loading have both completed. */
+let gameHasStarted : boolean = false;
 
 /** Mouse coordinates on the board */
 let mousePosition : Position2D = {x: 0, y: 0};
@@ -264,6 +268,30 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
 export function everyTick(callback : () => void) {
     // Register a callback to be called every tick
     tickWork.push(callback);
+}
+
+/**
+ * Registers a callback to run exactly once in the next game tick.
+ *
+ * The callback runs after the normal tick and periodic callbacks, but before
+ * the camera update and rendering. Work registered from normal tick callbacks
+ * runs on the following tick, not the current one. Work registered from
+ * {@link whenLoaded} or other startup callbacks runs in the first normal tick,
+ * because that is the next tick from the game loop's perspective. Queued work
+ * waits while the game is paused and is discarded by {@link clear} and
+ * {@link destroyEngine}.
+ *
+ * Use this when you need to defer work out of the current tick, for example
+ * when modifying state from a render callback.
+ *
+ * @param work - The callback to invoke once on the next tick
+ * @example
+ *   nextTick(() => {
+ *       spawnEnemyAfterCurrentFrame();
+ *   });
+ */
+export function nextTick(work : () => void) : void {
+    nextTickWork.push(work);
 }
 
 /**
@@ -705,6 +733,13 @@ function mainGameLoop() {
         }
     }
 
+    /* The click-to-start screen and asset loading have both completed. */
+    gameHasStarted = true;
+
+    /* Snapshot work queued before this tick. Work registered during this tick
+       will wait for the following tick. */
+    dueNextTickWork = nextTickWork.splice(0);
+
     /* Set up the loop */
     const start_time = Date.now();
     const delta_t = (start_time - lastGameLoopTime)/1000;
@@ -731,6 +766,12 @@ function mainGameLoop() {
     for(const work of periodicWork) {
         work.timeElapsed(delta_t);
     }
+
+    // Run one-shot work queued for this tick
+    for(const work of dueNextTickWork) {
+        work();
+    }
+    dueNextTickWork.length = 0;
 
     /* Update the camera */
     updateCamera(delta_t);
@@ -1013,11 +1054,27 @@ export function onResume(work : ()=>void) {
     onResumeWork.push(work);
 }
 
+/**
+ * Pauses the game loop, runs all registered pause callbacks, and repaints the
+ * frozen frame.
+ *
+ * This is a no-op before the click-to-start screen and asset loading have
+ * completed, and a no-op when the game is already paused. To update a pause
+ * menu after the game is already paused, change the relevant state and call
+ * {@link redraw} explicitly.
+ *
+ * Call this from outside the game loop, such as a keyboard/mouse event handler,
+ * a UI callback, or async code. Calling it from `everyTick`, `periodically`,
+ * `nextTick`, `afterDraw`, or a draw overlay will not stop the current loop,
+ * because the loop schedules its next timer after those callbacks run.
+ */
 export function pauseGame(): void {
+    if (!gameHasStarted) return;
     if (gameLoopTimeout < 0) return;
     clearTimeout(gameLoopTimeout);
     gameLoopTimeout = -1;
     for (const work of onPauseWork) work();
+    redraw();
 }
 
 export function resumeGame(): void {
@@ -1034,6 +1091,24 @@ export function togglePause(): void {
 
 export function isPaused(): boolean {
     return gameLoopTimeout < 0;
+}
+
+/**
+ * Synchronously repaints the current frame.
+ *
+ * This is useful while the game is paused, for example after changing a
+ * pause-menu label or revealing a resume button. It is a no-op before the game
+ * has started, after {@link destroyEngine}, or when no canvas is available.
+ *
+ * `redraw()` runs the normal draw path, including `afterDraw` callbacks,
+ * `drawOverlay` hooks, and progress-bar getters. It is not a cached-frame blit.
+ * Do not call it from inside a render callback. If an asynchronous operation
+ * updates the paused frame later, call `redraw()` again when that work
+ * completes.
+ */
+export function redraw(): void {
+    if (!canvas || !gameHasStarted) return;
+    draw();
 }
 
 export function afterDraw(callback: (ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number) => void): void {
@@ -1343,7 +1418,9 @@ export function setSize(width: number, height: number) {
 /**
  * Clears all game objects and assets from the engine.
  * Destroys all game objects and empties all collections including players, enemies,
- * projectiles, items, and collision actions. Also resets camera position to origin.
+ * projectiles, items, and collision actions. Also resets camera position to origin
+ * and discards pending one-shot {@link nextTick} callbacks so work from the previous
+ * run cannot affect the next one.
  *
  * @example
  *   clear(); // Use this when resetting or restarting a game
@@ -1374,6 +1451,11 @@ export function clear() {
         windowWidth = nominalWindowWidth;
         windowHeight = nominalWindowHeight;
     }
+
+    // Drop deferred work belonging to the previous run. Clear after destroying
+    // objects so nextTick() calls made from onDestroy callbacks are also dropped.
+    nextTickWork.length = 0;
+    dueNextTickWork.length = 0;
 }
 
 /**
@@ -1415,6 +1497,7 @@ export function destroyEngine(): void {
     // Clear callback registries
     tickWork.length = 0;
     periodicWork.length = 0;
+    nextTickWork.length = 0;
     onLoadedWork.length = 0;
     onPauseWork.length = 0;
     onResumeWork.length = 0;
@@ -1439,6 +1522,7 @@ export function destroyEngine(): void {
     // Reset engine flags
     notAllClassesAreLoaded = true;
     stillNeedInitialMouseClick = true;
+    gameHasStarted = false;
 
     // Reset camera/board/window to defaults
     boardWidth = 10000;

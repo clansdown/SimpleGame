@@ -155,6 +155,7 @@ If you don't pass a setup function, `initEngine` uses the one exported from
 |---|---|
 | `whenLoaded(fn)` | Fires once when all game classes have loaded their images. |
 | `everyTick(fn)` | Registers a callback invoked every frame (~40 fps). |
+| `nextTick(fn)` | Registers a one-shot callback to run in the next game tick, after normal tick callbacks and before rendering. Does not run while paused. |
 | `periodically(seconds, fn)` | Registers a callback invoked at a fixed interval. |
 | `onPause(fn)` | Fires when the game is paused (`pauseGame()`, `togglePause()`, or p key). |
 | `onResume(fn)` | Fires when the game resumes (`resumeGame()`, `togglePause()`, or p key). |
@@ -166,10 +167,59 @@ If you don't pass a setup function, `initEngine` uses the one exported from
 
 | Function | Description |
 |---|---|
-| `pauseGame()` | Pause the game loop immediately. No-op if already paused. |
+| `pauseGame()` | Pause the game loop, run `onPause` callbacks, and repaint the frozen frame. No-op before the game has fully started or if already paused. |
 | `resumeGame()` | Resume the game loop immediately. No-op if already running. |
 | `togglePause()` | Toggle between paused and running. |
 | `isPaused()` | Returns `true` if the game is currently paused. |
+| `redraw()` | Synchronously repaint the current frame. Works while paused; no-op before the game has started. |
+
+### Repainting while paused and deferred work
+
+`pauseGame()` runs all `onPause` callbacks and then calls `redraw()`. This lets
+a pause callback update canvas-drawn UI — labels, overlays, HUD buttons — and
+have those changes appear immediately.
+
+`redraw()` runs the normal draw path, including `afterDraw` callbacks,
+`drawOverlay` hooks, and progress-bar getters. It is not a cached-frame blit.
+Do not call `redraw()` from inside a render callback.
+
+`pauseGame()` is idempotent: once paused, calling it again does nothing. To
+update an already-paused menu, change the relevant state and call `redraw()`
+explicitly. If an asynchronous operation updates the paused frame later, call
+`redraw()` again when it completes.
+
+`pauseGame()` must be called from outside the game loop, such as a keyboard or
+mouse event handler, a UI callback, or async code. Calling it from
+`everyTick()`, `periodically()`, `nextTick()`, `afterDraw()`, or a draw overlay
+will not stop the current loop.
+
+Use `nextTick(fn)` for one-shot work that must happen outside the current tick.
+The callback runs after the normal tick and periodic callbacks, but before the
+camera update and rendering. Work registered from normal tick callbacks runs on
+the following tick. Work registered from `whenLoaded()` or other startup
+callbacks runs in the first normal tick, because that is the next tick from the
+game loop's perspective. Queued work waits while the game is paused and is
+discarded by `clear()` and `destroyEngine()`. Like all in-loop callbacks, it
+must not call `pauseGame()`.
+
+```typescript
+onPause(() => {
+    pauseOverlay.visible = true;
+    resumeButton.visible = true;
+    // pauseGame() repaints automatically after all onPause callbacks.
+});
+
+onPause(() => {
+    loadPauseIcon().then(() => {
+        pauseIcon.visible = true;
+        redraw(); // Repaint again after the asynchronous update.
+    });
+});
+
+// Already paused: update state, then repaint manually.
+resumeButton.setText("Resuming...");
+redraw();
+```
 
 ---
 
@@ -241,17 +291,19 @@ removes game objects and resets the camera.
 | `setBackground(tiles, whenLoaded?)` | function | Set background from image URLs. |
 | `setBackgroundMode(mode)` | function | `"tile"` (default, scrolls with camera) or `"stretch"` (fills viewport, no scroll). |
 | `setBackgroundTileSize(width, height)` | function | Tile size in board coordinates for tiled backgrounds. Both dimensions required; images scaled to fit. Tile mode only. |
-| `clear()` | function | Remove all game objects and reset camera. Use for level restart. Keeps engine running. |
+| `clear()` | function | Remove all game objects, reset camera, and discard pending `nextTick()` work. Use for level restart. Keeps engine running. |
 | `destroyEngine()` | function | Full teardown. Stops loop, removes listeners, clears callbacks, game state. Engine must be re-initialised with `initEngine()` afterwards. |
 | `debug(text)` | function | Write to the debug div. |
 | `getMousePosition()` | function | Get current mouse coordinates on the board. |
 | `everyTick(fn)` | function | Register a per-frame callback. |
+| `nextTick(fn)` | function | Register a one-shot callback for the next game tick. Runs after normal tick callbacks and before rendering; waits while paused. |
 | `periodically(seconds, fn)` | function | Register a timed callback. |
 | `whenLoaded(fn)` | function | Callback when all images are loaded. |
-| `onPause(fn)` / `onResume(fn)` | function | Pause/resume hooks. See also `pauseGame`, `resumeGame`, `togglePause`, `isPaused`. |
-| `pauseGame()` / `resumeGame()` | function | Programmatic pause/resume. |
+| `onPause(fn)` / `onResume(fn)` | function | Pause/resume hooks. See also `pauseGame`, `resumeGame`, `togglePause`, `isPaused`, `redraw`. |
+| `pauseGame()` / `resumeGame()` | function | Programmatic pause/resume. `pauseGame()` repaints after pause callbacks and is a no-op before the game has started. |
 | `togglePause()` | function | Toggle pause state. |
 | `isPaused()` | function | Returns `boolean` — `true` if the game is paused. |
+| `redraw()` | function | Synchronously repaint the current frame. Works while paused; no-op before the game has started. |
 | `onKeyDown(key, fn)` / `onKeyUp(key, fn)` | function | Keyboard input hooks. |
 | `onMouseClick(button, fn)` | function | **Global** mouse click fallback. Fires when no matching object (by z-order targeting) has an `onClick` handler and mouseup occurs within 600ms of mousedown. The handler receives `(event, x, y)` in board coordinates. For per-object clicks, use `obj.onClick()` instead — see [Z-Order](#z-order) for how the topmost handler-owning object is selected. |
 | `onButtonDown(btn, fn)` | function | ⚠️ Not yet implemented — no-op stub. |
