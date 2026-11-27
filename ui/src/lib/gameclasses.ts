@@ -367,12 +367,38 @@ export class GameObjectClass {
     }
 }
 
+/** Controls when a content mutation invalidates its parent layout. */
+export type LayoutInvalidationMode = "auto" | "always" | "never";
+
+/** Options accepted by layout-aware setters. */
+export type LayoutInvalidationOptions = {
+    invalidateLayout?: LayoutInvalidationMode;
+};
+
 export class GameObject {
     hitpoints : number;
     x : number;
     y : number;
     width: number;
     height : number;
+
+    /** Minimum layout width in the object's layout units. */
+    layoutMinWidth?: number;
+    /** Minimum layout height in the object's layout units. */
+    layoutMinHeight?: number;
+    /** Intrinsic width captured before the first layout-assigned resize. */
+    layoutIntrinsicWidth?: number;
+    /** Intrinsic height captured before the first layout-assigned resize. */
+    layoutIntrinsicHeight?: number;
+    /** Width most recently assigned by a layout container. */
+    layoutAssignedWidth?: number;
+    /** Height most recently assigned by a layout container. */
+    layoutAssignedHeight?: number;
+    /** Width constraint supplied by a parent layout container. */
+    layoutAvailableWidth?: number;
+    /** Height constraint supplied by a parent layout container. */
+    layoutAvailableHeight?: number;
+
     hitboxWidth : number;
     hitboxHeight : number;
     hitboxXOffset : number;
@@ -456,6 +482,15 @@ export class GameObject {
 
     /** The object this is attached to, if any */
     attachedTo : GameObject|null = null;
+
+    /** True after destroy() has started. Makes destroy() idempotent. */
+    destroyed: boolean = false;
+
+    /**
+     * When true, destroy() destroys attached children instead of only detaching
+     * them. Layout containers and page roots set this to true.
+     */
+    destroyAttachedOnDestroy: boolean = false;
 
     /** Whether this object is visible and interactive. Hiding a container hides all attached children via ancestor-chain checks in the engine. */
     visible: boolean = true;
@@ -547,6 +582,310 @@ export class GameObject {
         this.spriteReflectionHysteresisDeg =
             gameclass.defaultSpriteReflectionHysteresisDeg;
         this.singleCollisionOnly = gameclass.defaultSingleCollisionOnly;
+    }
+
+    /**
+     * Marks the nearest layout ancestors dirty so they reflow before drawing.
+     *
+     * Layout containers override this to set their own dirty flag and continue
+     * propagating upward through `attachedTo`.
+     */
+    invalidateLayout(): void {
+        this.attachedTo?.invalidateLayout();
+    }
+
+    /**
+     * Returns the width this object contributes to layout.
+     *
+     * Base objects use their explicit `width`, raised to `layoutMinWidth` when
+     * one is set. Text overrides this with measured content width.
+     */
+    getLayoutWidth(): number {
+        this.refreshLayoutIntrinsicSize();
+        return Math.max(
+            this.layoutIntrinsicWidth ?? this.width,
+            this.layoutMinWidth ?? 0
+        );
+    }
+
+    /**
+     * Returns the height this object contributes to layout.
+     *
+     * Base objects use their explicit `height`, raised to `layoutMinHeight` when
+     * one is set. Text overrides this with measured content height.
+     */
+    getLayoutHeight(): number {
+        this.refreshLayoutIntrinsicSize();
+        return Math.max(
+            this.layoutIntrinsicHeight ?? this.height,
+            this.layoutMinHeight ?? 0
+        );
+    }
+
+    /**
+     * Returns the width used when placing the object in a layout slot.
+     *
+     * Base objects use their current drawn width, which may differ from the
+     * intrinsic layout width after a stretch or maximize assignment.
+     */
+    getLayoutVisualWidth(): number {
+        this.refreshLayoutIntrinsicSize();
+        return Math.max(this.width, this.layoutMinWidth ?? 0);
+    }
+
+    /**
+     * Returns the height used when placing the object in a layout slot.
+     *
+     * Base objects use their current drawn height, which may differ from the
+     * intrinsic layout height after a stretch or maximize assignment.
+     */
+    getLayoutVisualHeight(): number {
+        this.refreshLayoutIntrinsicSize();
+        return Math.max(this.height, this.layoutMinHeight ?? 0);
+    }
+
+    /**
+     * Applies a width assigned by a parent layout container.
+     *
+     * The assigned width is clamped to the layout minimum and keeps a matching
+     * hitbox in sync. Custom hitboxes that differed from the object size are
+     * preserved.
+     *
+     * @param width - New layout width
+     */
+    setLayoutWidth(width: number): void {
+        const oldWidth = this.width;
+        const resolvedWidth = Math.max(width, this.layoutMinWidth ?? 0);
+        this.width = resolvedWidth;
+        this.layoutAssignedWidth = resolvedWidth;
+        if (this.hitboxWidth === oldWidth) {
+            this.hitboxWidth = resolvedWidth;
+        }
+    }
+
+    /**
+     * Applies a height assigned by a parent layout container.
+     *
+     * The assigned height is clamped to the layout minimum and keeps a matching
+     * hitbox in sync. Custom hitboxes that differed from the object size are
+     * preserved.
+     *
+     * @param height - New layout height
+     */
+    setLayoutHeight(height: number): void {
+        const oldHeight = this.height;
+        const resolvedHeight = Math.max(height, this.layoutMinHeight ?? 0);
+        this.height = resolvedHeight;
+        this.layoutAssignedHeight = resolvedHeight;
+        if (this.hitboxHeight === oldHeight) {
+            this.hitboxHeight = resolvedHeight;
+        }
+    }
+
+    /**
+     * Returns the horizontal offset from the object origin to its visual
+     * layout centre. Base objects are already centre-anchored.
+     */
+    getLayoutOffsetX(): number {
+        return 0;
+    }
+
+    /**
+     * Returns the vertical offset from the object origin to its visual layout
+     * centre. Base objects are already centre-anchored.
+     */
+    getLayoutOffsetY(): number {
+        return 0;
+    }
+
+    /**
+     * Applies a layout-assigned size and keeps a matching hitbox in sync.
+     *
+     * If the hitbox matched the previous width/height, it is resized with the
+     * object. Custom hitboxes that differed from the object size are preserved.
+     *
+     * @param width - New layout width
+     * @param height - New layout height
+     */
+    setLayoutSize(width: number, height: number): void {
+        this.setLayoutWidth(width);
+        this.setLayoutHeight(height);
+    }
+
+    /**
+     * Captures the current width as the intrinsic width before a
+     * layout-assigned resize.
+     */
+    captureLayoutIntrinsicWidth(): void {
+        if (this.layoutIntrinsicWidth === undefined) {
+            this.layoutIntrinsicWidth = this.width;
+        }
+    }
+
+    /**
+     * Captures the current height as the intrinsic height before a
+     * layout-assigned resize.
+     */
+    captureLayoutIntrinsicHeight(): void {
+        if (this.layoutIntrinsicHeight === undefined) {
+            this.layoutIntrinsicHeight = this.height;
+        }
+    }
+
+    /**
+     * Clears all intrinsic and assigned size tracking. Call this after an
+     * external or widget-internal resize that should become the new baseline.
+     */
+    clearLayoutIntrinsicSize(): void {
+        this.layoutIntrinsicWidth = undefined;
+        this.layoutIntrinsicHeight = undefined;
+        this.layoutAssignedWidth = undefined;
+        this.layoutAssignedHeight = undefined;
+    }
+
+    /**
+     * Detects external size changes that happened after a layout assignment and
+     * clears stale intrinsic values so they do not overwrite the new size.
+     */
+    refreshLayoutIntrinsicSize(): void {
+        if (
+            this.layoutIntrinsicWidth !== undefined &&
+            this.layoutAssignedWidth !== undefined &&
+            this.width !== this.layoutAssignedWidth
+        ) {
+            this.layoutIntrinsicWidth = undefined;
+            this.layoutAssignedWidth = undefined;
+        }
+        if (
+            this.layoutIntrinsicHeight !== undefined &&
+            this.layoutAssignedHeight !== undefined &&
+            this.height !== this.layoutAssignedHeight
+        ) {
+            this.layoutIntrinsicHeight = undefined;
+            this.layoutAssignedHeight = undefined;
+        }
+    }
+
+    /**
+     * Restores any layout-assigned size back to the captured intrinsic size.
+     * External changes detected through refreshLayoutIntrinsicSize() win over
+     * stale captured values.
+     */
+    restoreLayoutIntrinsicSize(): void {
+        this.refreshLayoutIntrinsicSize();
+        if (
+            this.layoutIntrinsicWidth !== undefined &&
+            (this.layoutAssignedWidth === undefined ||
+                this.width === this.layoutAssignedWidth)
+        ) {
+            this.setLayoutWidth(this.layoutIntrinsicWidth);
+            this.layoutIntrinsicWidth = undefined;
+            this.layoutAssignedWidth = undefined;
+        }
+        if (
+            this.layoutIntrinsicHeight !== undefined &&
+            (this.layoutAssignedHeight === undefined ||
+                this.height === this.layoutAssignedHeight)
+        ) {
+            this.setLayoutHeight(this.layoutIntrinsicHeight);
+            this.layoutIntrinsicHeight = undefined;
+            this.layoutAssignedHeight = undefined;
+        }
+    }
+
+    /**
+     * Applies a width constraint supplied by a parent layout container.
+     * Base objects ignore it; layout containers use it for nested reflow.
+     *
+     * @param width - Available width, or undefined to clear it
+     */
+    applyLayoutAvailableWidth(width: number | undefined): void {
+        // Base game objects do not contain a nested layout.
+    }
+
+    /**
+     * Applies a height constraint supplied by a parent layout container.
+     * Base objects ignore it; layout containers use it for nested reflow.
+     *
+     * @param height - Available height, or undefined to clear it
+     */
+    applyLayoutAvailableHeight(height: number | undefined): void {
+        // Base game objects do not contain a nested layout.
+    }
+
+    /**
+     * Gives nested layout containers a chance to reflow before a parent
+     * measures them. Base objects have no nested layout.
+     */
+    layoutForMeasurement(): void {
+        // Base game objects do not contain a nested layout.
+    }
+
+    /**
+     * Sets visibility and invalidates parent layout when the value changes.
+     *
+     * Layout containers skip invisible children. Direct assignment to `visible`
+     * still works but does not invalidate layout automatically.
+     *
+     * @param visible - Whether this object should be visible
+     */
+    setVisible(visible: boolean): void {
+        if (this.visible === visible) return;
+        this.visible = visible;
+        this.invalidateLayout();
+    }
+
+    /**
+     * Sets a minimum width used by layout measurement.
+     *
+     * @param min - Minimum width in layout units, or null to clear it
+     */
+    setLayoutMinWidth(min: number | null): void {
+        this.applyLayoutMutation(() => {
+            this.layoutMinWidth = min ?? undefined;
+        });
+    }
+
+    /**
+     * Sets a minimum height used by layout measurement.
+     *
+     * @param min - Minimum height in layout units, or null to clear it
+     */
+    setLayoutMinHeight(min: number | null): void {
+        this.applyLayoutMutation(() => {
+            this.layoutMinHeight = min ?? undefined;
+        });
+    }
+
+    /**
+     * Applies a mutation and invalidates layout only when the effective layout
+     * size changed.
+     *
+     * @param change - Mutation to apply
+     * @param options - Invalidation override; defaults to automatic detection
+     */
+    protected applyLayoutMutation(
+        change: () => void,
+        options?: LayoutInvalidationOptions
+    ): void {
+        const oldWidth = this.getLayoutWidth();
+        const oldHeight = this.getLayoutHeight();
+        change();
+
+        const mode = options?.invalidateLayout ?? "auto";
+        if (mode === "always") {
+            this.invalidateLayout();
+            return;
+        }
+        if (mode === "never") {
+            return;
+        }
+        if (
+            oldWidth !== this.getLayoutWidth() ||
+            oldHeight !== this.getLayoutHeight()
+        ) {
+            this.invalidateLayout();
+        }
     }
 
     onClick(button: number, handler: (event: MouseEvent) => void) {
@@ -687,6 +1026,7 @@ export class GameObject {
         this.x += vector[0];
         this.y += vector[1];
         this.updateAttached();
+        this.attachedTo?.syncAttachOffset(this);
     }
 
     /**
@@ -696,6 +1036,7 @@ export class GameObject {
         this.x = x;
         this.y = y;
         this.updateAttached();
+        this.attachedTo?.syncAttachOffset(this);
     }
 
     /**
@@ -845,6 +1186,54 @@ export class GameObject {
     detach(gameObject: GameObject) {
         this.attachedObjects = this.attachedObjects.filter(attached => attached.gameObject !== gameObject);
         gameObject.attachedTo = null;
+    }
+
+    /**
+     * Updates the stored offset for an attached child from its current
+     * position. Called after the child moves so parent movement preserves the
+     * new relative placement.
+     *
+     * @param child - Attached child whose offset should be refreshed
+     */
+    syncAttachOffset(child: GameObject): void {
+        for (const attached of this.attachedObjects) {
+            if (attached.gameObject === child) {
+                attached.offsetX = child.x - this.x;
+                attached.offsetY = child.y - this.y;
+            }
+        }
+    }
+
+    /**
+     * Detaches every currently attached object without destroying it.
+     */
+    detachAllAttachedObjects(): void {
+        for (const attached of [...this.attachedObjects]) {
+            this.detach(attached.gameObject);
+        }
+    }
+
+    /**
+     * Called by a child while it is being destroyed so the parent can remove it
+     * from layout structures and reconcile ownership.
+     *
+     * Base objects only detach the child. Layout containers also remove it from
+     * their `children` array.
+     *
+     * @param child - Child that is being destroyed
+     */
+    onChildDestroyed(child: GameObject): void {
+        this.detach(child);
+    }
+
+    /**
+     * Called after an attached parent has moved this object.
+     *
+     * Base objects do nothing. Layout containers update their own attached
+     * children, making parent movement propagate through the attachment tree.
+     */
+    onAttachedParentMoved(): void {
+        // Base objects have no attached descendants to reposition.
     }
 
     /**
@@ -1082,9 +1471,31 @@ export class GameObject {
     }
 
     destroy() {
+        if (this.destroyed) return;
+        this.destroyed = true;
+
         if(this.onDestroyWork) {
             this.onDestroyWork();
         }
+
+        const attached = [...this.attachedObjects];
+        if (this.destroyAttachedOnDestroy) {
+            for (const child of attached) {
+                child.gameObject.destroy();
+            }
+        } else {
+            for (const child of attached) {
+                this.detach(child.gameObject);
+            }
+        }
+
+        const parent = this.attachedTo;
+        if (parent) {
+            parent.onChildDestroyed(this);
+            this.attachedTo = null;
+        }
+        this.attachedObjects.length = 0;
+
         this.gameclass.destroy(this);
     }
 
@@ -1331,6 +1742,7 @@ class AttachedGameObject {
         this.gameObject.orientation = parent.orientation + this.orientationOffset;
         this.gameObject.direction_x = Math.cos(this.gameObject.orientation - Math.PI/2);
         this.gameObject.direction_y = Math.sin(this.gameObject.orientation - Math.PI/2);
+        this.gameObject.onAttachedParentMoved();
     }
 }
 
@@ -1569,7 +1981,7 @@ export class Projectile extends GameObject {
     }
 
     destroy(): void {
-        this.gameclass.destroy(this);
+        super.destroy();
     }
 
 }
@@ -1606,7 +2018,7 @@ export class Item extends GameObject {
     }
 
     destroy(): void {
-        gameObjects.delete(this);
+        super.destroy();
         items.delete(this);
     }
 }
@@ -1661,7 +2073,6 @@ export class TextClass extends GameObjectClass {
 
     spawnAt(text : string, pos : Position2D, inlineImages?: InlineImageMap) : Text {
         const t = new Text(this, text, pos.x, pos.y, inlineImages);
-        t.text = text;
         this.spawned(t);
         return t;
     }
@@ -1704,7 +2115,55 @@ export interface InlineImageDef {
 
 export type InlineImageMap = Record<string, InlineImageDef>;
 
+type MeasuredTextSegment =
+    | {
+        type: "text";
+        value: string;
+        width: number;
+        ascent: number;
+        descent: number;
+        left: number;
+    }
+    | {
+        type: "image";
+        def: InlineImageDef;
+        width: number;
+        height: number;
+    };
+
+type TextMeasurement = {
+    width: number;
+    height: number;
+    fontHeight: number;
+    segments: MeasuredTextSegment[];
+};
+
 const TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+let textMeasurementCanvas: HTMLCanvasElement | null = null;
+let textMeasurementContext: CanvasRenderingContext2D | null = null;
+
+/**
+ * Returns a shared offscreen 2D context for text measurement.
+ */
+function getTextMeasurementContext(): CanvasRenderingContext2D | null {
+    if (textMeasurementContext) return textMeasurementContext;
+    if (typeof document === "undefined") return null;
+    textMeasurementCanvas = document.createElement("canvas");
+    textMeasurementContext = textMeasurementCanvas.getContext("2d");
+    return textMeasurementContext;
+}
+
+/**
+ * Releases the shared offscreen text measurement context.
+ *
+ * Called by engine teardown so a destroyed engine leaves no measurement
+ * resources behind.
+ */
+export function resetTextMeasurementContext(): void {
+    textMeasurementCanvas = null;
+    textMeasurementContext = null;
+}
 
 export class Text extends GameObject {
     text : string;
@@ -1718,6 +2177,21 @@ export class Text extends GameObject {
     shadowOffsetY: number = 2;
     textAlign: CanvasTextAlign = "left";
     inlineImages?: InlineImageMap;
+
+    /** Sample whose measured width is reserved as a layout minimum. */
+    layoutMinWidthSample?: string;
+    /** Sample whose measured height is reserved as a layout minimum. */
+    layoutMinHeightSample?: string;
+
+    private measurementCache?: {
+        signature: string;
+        measurement: TextMeasurement;
+    };
+
+    private sampleMeasurementCache?: {
+        signature: string;
+        measurement: TextMeasurement;
+    };
 
 
     constructor(gameclass : TextClass, text:string, x : number, y : number, inlineImages?: InlineImageMap) {
@@ -1741,30 +2215,255 @@ export class Text extends GameObject {
     }
 
     setTextAlign(align: CanvasTextAlign): void {
+        if (this.textAlign === align) return;
         this.textAlign = align;
+        this.invalidateLayout();
     }
 
-    setInlineImages(images: InlineImageMap): void {
-        for (const name in images) {
-            const def = images[name];
-            if (typeof def.image === "string") {
-                const img = new Image();
-                const url = def.image;
-                img.onload = () => { def.image = img; };
-                img.onerror = () => {
-                    console.error(`[Text] Failed to load inline image "${url}"`);
-                    img.src = TRANSPARENT_GIF;
-                    def.image = img;
-                };
-                img.src = url;
+    /**
+     * Updates the text and optionally invalidates layout when its measured
+     * layout size changes.
+     *
+     * @param text - New text content
+     * @param options - Invalidation override; defaults to automatic detection
+     */
+    setText(text: string, options?: LayoutInvalidationOptions): void {
+        this.applyLayoutMutation(() => {
+            this.text = text;
+        }, options);
+    }
+
+    /**
+     * Updates the font size and optionally invalidates layout when its measured
+     * layout size changes.
+     *
+     * @param size - New font size in layout units
+     * @param options - Invalidation override; defaults to automatic detection
+     */
+    setSize(size: number, options?: LayoutInvalidationOptions): void {
+        if (!Number.isFinite(size) || size <= 0) return;
+        this.applyLayoutMutation(() => {
+            this.size = size;
+        }, options);
+    }
+
+    /**
+     * Sets a text sample whose measured width becomes the minimum layout width.
+     *
+     * @param sample - Text to measure, or null to clear the minimum
+     */
+    setLayoutMinWidthSample(sample: string | null): void {
+        this.applyLayoutMutation(() => {
+            this.layoutMinWidthSample = sample ?? undefined;
+        });
+    }
+
+    /**
+     * Sets a text sample whose measured height becomes the minimum layout height.
+     *
+     * @param sample - Text to measure, or null to clear the minimum
+     */
+    setLayoutMinHeightSample(sample: string | null): void {
+        this.applyLayoutMutation(() => {
+            this.layoutMinHeightSample = sample ?? undefined;
+        });
+    }
+
+    setInlineImages(images: InlineImageMap, options?: LayoutInvalidationOptions): void {
+        this.applyLayoutMutation(() => {
+            for (const name in images) {
+                const def = images[name];
+                if (typeof def.image === "string") {
+                    const img = new Image();
+                    const url = def.image;
+                    img.onload = () => { def.image = img; };
+                    img.onerror = () => {
+                        console.error(`[Text] Failed to load inline image "${url}"`);
+                        img.src = TRANSPARENT_GIF;
+                        def.image = img;
+                    };
+                    img.src = url;
+                }
+            }
+            this.inlineImages = images;
+        }, options);
+        this.measurementCache = undefined;
+        this.sampleMeasurementCache = undefined;
+    }
+
+    /**
+     * Returns the font string used by both drawing and measurement.
+     */
+    private getFontString(): string {
+        return this.size + "px Arial, Helvetica, sans-serif";
+    }
+
+    private getMeasurementContext(): CanvasRenderingContext2D | null {
+        return getTextMeasurementContext();
+    }
+
+    /**
+     * Builds a cache key from all fields that affect measured text dimensions.
+     */
+    private getMeasurementSignature(): string {
+        let inlineSignature = "";
+        if (this.inlineImages) {
+            for (const name in this.inlineImages) {
+                const def = this.inlineImages[name];
+                const image = def.image;
+                const imageIdentity = typeof image === "string"
+                    ? image
+                    : `${image.src}:${image.complete}:${image.naturalWidth}`;
+                inlineSignature +=
+                    `${name}:${def.width}:${def.height}:${imageIdentity};`;
             }
         }
-        this.inlineImages = images;
+        return `${this.size}\u0000${this.text}\u0000${inlineSignature}`;
+    }
+
+    /**
+     * Measures the given text string using the current font and inline images.
+     */
+    private measureFromText(text: string): TextMeasurement {
+        const ctx = this.getMeasurementContext();
+        if (!ctx) {
+            return {
+                width: 0,
+                height: this.size,
+                fontHeight: this.size,
+                segments: [],
+            };
+        }
+
+        ctx.font = this.getFontString();
+        const fontMetrics = ctx.measureText("Mg");
+        const fontHeight =
+            ((fontMetrics.fontBoundingBoxAscent ?? 0) +
+                (fontMetrics.fontBoundingBoxDescent ?? 0)) || this.size;
+
+        const segments: MeasuredTextSegment[] = [];
+        let width = 0;
+        let height = fontHeight;
+
+        for (const parsed of parseInlineText(text)) {
+            if (parsed.type === "text") {
+                const metrics = ctx.measureText(parsed.value);
+                const segmentWidth = metrics.width;
+                const ascent = metrics.actualBoundingBoxAscent ?? 0;
+                const descent = metrics.actualBoundingBoxDescent ?? 0;
+                segments.push({
+                    type: "text",
+                    value: parsed.value,
+                    width: segmentWidth,
+                    ascent: ascent,
+                    descent: descent,
+                    left: metrics.actualBoundingBoxLeft ?? 0,
+                });
+                width += segmentWidth;
+            } else {
+                const def = this.inlineImages?.[parsed.value];
+                if (def) {
+                    segments.push({
+                        type: "image",
+                        def: def,
+                        width: def.width,
+                        height: def.height,
+                    });
+                    width += def.width;
+                    height = Math.max(height, def.height);
+                }
+            }
+        }
+
+        return {
+            width: width,
+            height: height,
+            fontHeight: fontHeight,
+            segments: segments,
+        };
+    }
+
+    /**
+     * Returns cached measurement for the current text, if the signature matches.
+     */
+    private measureTextLayout(): TextMeasurement {
+        const signature = this.getMeasurementSignature();
+        if (this.measurementCache?.signature === signature) {
+            return this.measurementCache.measurement;
+        }
+        const measurement = this.measureFromText(this.text);
+        if (this.getMeasurementContext()) {
+            this.measurementCache = { signature, measurement };
+        }
+        return measurement;
+    }
+
+    /**
+     * Returns cached measurement for a minimum-size sample.
+     */
+    private measureSample(text: string): TextMeasurement {
+        const signature =
+            this.getMeasurementSignature() + "\u0000sample\u0000" + text;
+        if (this.sampleMeasurementCache?.signature === signature) {
+            return this.sampleMeasurementCache.measurement;
+        }
+        const measurement = this.measureFromText(text);
+        if (this.getMeasurementContext()) {
+            this.sampleMeasurementCache = { signature, measurement };
+        }
+        return measurement;
+    }
+
+    /**
+     * Returns effective layout width including numeric and sample minimums.
+     */
+    override getLayoutWidth(): number {
+        const measured = this.measureTextLayout().width;
+        const sampleWidth = this.layoutMinWidthSample
+            ? this.measureSample(this.layoutMinWidthSample).width
+            : 0;
+        return Math.max(measured, this.layoutMinWidth ?? 0, sampleWidth);
+    }
+
+    /**
+     * Returns effective layout height including numeric and sample minimums.
+     */
+    override getLayoutHeight(): number {
+        const measured = this.measureTextLayout().height;
+        const sampleHeight = this.layoutMinHeightSample
+            ? this.measureSample(this.layoutMinHeightSample).height
+            : 0;
+        return Math.max(measured, this.layoutMinHeight ?? 0, sampleHeight);
+    }
+
+    override getLayoutVisualWidth(): number {
+        return this.getLayoutWidth();
+    }
+
+    override getLayoutVisualHeight(): number {
+        return this.getLayoutHeight();
+    }
+
+    /**
+     * Returns the offset from the text origin to its layout centre.
+     */
+    override getLayoutOffsetX(): number {
+        const width = this.getLayoutWidth();
+        if (this.textAlign === "center") return 0;
+        if (this.textAlign === "right") return -width / 2;
+        return width / 2;
+    }
+
+    /**
+     * Text is vertically centred on its draw origin.
+     */
+    override getLayoutOffsetY(): number {
+        return 0;
     }
 
     draw(ctx : CanvasRenderingContext2D, offsetX : number, offsetY : number) {
         ctx.save();
-        ctx.font = this.size + "px Arial, Helvetica, sans-serif";
+        ctx.font = this.getFontString();
         ctx.translate(this.x - offsetX, this.y - offsetY);
         ctx.textBaseline = "middle";
         ctx.textAlign = "left";
@@ -1774,18 +2473,9 @@ export class Text extends GameObject {
             ctx.globalAlpha = this.opacity;
         }
 
-        const segments = parseInlineText(this.text);
-
-        // Compute total width for alignment
-        let totalWidth = 0;
-        for (const seg of segments) {
-            if (seg.type === "text") {
-                totalWidth += ctx.measureText(seg.value).width;
-            } else if (seg.type === "image") {
-                const def = this.inlineImages?.[seg.value];
-                if (def) totalWidth += def.width;
-            }
-        }
+        const measurement = this.measureTextLayout();
+        const segments = measurement.segments;
+        const totalWidth = measurement.width;
 
         let xCursor = 0;
         if (this.textAlign === "center") xCursor = -totalWidth / 2;
@@ -1793,15 +2483,16 @@ export class Text extends GameObject {
 
         for (const seg of segments) {
             if (seg.type === "text") {
-                const metrics = ctx.measureText(seg.value);
-                const textWidth = metrics.width;
-                const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-
                 if (this.highlightColor) {
                     ctx.fillStyle = this.highlightColor;
-                    const hx = xCursor - metrics.actualBoundingBoxLeft - this.highlightPadding;
-                    const hy = -metrics.actualBoundingBoxAscent - this.highlightPadding;
-                    ctx.fillRect(hx, hy, textWidth + this.highlightPadding * 2, textHeight + this.highlightPadding * 2);
+                    const hx = xCursor - seg.left - this.highlightPadding;
+                    const hy = -seg.ascent - this.highlightPadding;
+                    ctx.fillRect(
+                        hx,
+                        hy,
+                        seg.width + this.highlightPadding * 2,
+                        seg.ascent + seg.descent + this.highlightPadding * 2
+                    );
                 }
 
                 if (this.shadowColor) {
@@ -1821,17 +2512,20 @@ export class Text extends GameObject {
                     ctx.shadowOffsetY = 0;
                 }
 
-                xCursor += textWidth;
+                xCursor += seg.width;
 
             } else if (seg.type === "image") {
-                const def = this.inlineImages?.[seg.value];
-                if (def) {
-                    const img = def.image instanceof HTMLImageElement ? def.image : null;
-                    if (img && img.complete && img.naturalWidth > 0) {
-                        ctx.drawImage(img, xCursor, -def.height / 2, def.width, def.height);
-                    }
-                    xCursor += def.width;
+                const img = seg.def.image instanceof HTMLImageElement ? seg.def.image : null;
+                if (img && img.complete && img.naturalWidth > 0) {
+                    ctx.drawImage(
+                        img,
+                        xCursor,
+                        -seg.def.height / 2,
+                        seg.def.width,
+                        seg.def.height
+                    );
                 }
+                xCursor += seg.def.width;
             }
         }
 

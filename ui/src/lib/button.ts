@@ -1,4 +1,4 @@
-import { GameObject, GameObjectClass } from "./gameclasses";
+import { GameObject, GameObjectClass, type LayoutInvalidationOptions } from "./gameclasses";
 import { getMousePosition, buttonDebugLevel } from "./simplegame";
 import type { Position2D } from "./util";
 
@@ -229,9 +229,20 @@ export class Button extends GameObject {
         });
     }
 
-    setText(text: string) {
+    /**
+     * Updates the button label.
+     *
+     * Buttons have fixed layout dimensions after construction, so the default
+     * automatic invalidation normally does not trigger a parent reflow.
+     *
+     * @param text - New button label
+     * @param options - Invalidation override; defaults to automatic detection
+     */
+    setText(text: string, options?: LayoutInvalidationOptions): void {
         if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}" -> setText("${text}")`);
-        this.text = text;
+        this.applyLayoutMutation(() => {
+            this.text = text;
+        }, options);
     }
 
     setOnClick(callback: () => void) {
@@ -324,6 +335,14 @@ export class Button extends GameObject {
 
     setIconLayout(layout: IconLayout): void {
         this.iconLayout = layout;
+    }
+
+    override destroy(): void {
+        this._cancelTooltipTimer();
+        if (this.tooltip) {
+            this.tooltip.visible = false;
+        }
+        super.destroy();
     }
 
     // --- Tooltip internal helpers ---
@@ -734,9 +753,11 @@ export class ToggleButton extends Button {
         if (!this.toggled) this._syncColors();
     }
 
-    override setText(text: string): void {
-        this._baseText = text;
-        this._syncColors();
+    override setText(text: string, options?: LayoutInvalidationOptions): void {
+        this.applyLayoutMutation(() => {
+            this._baseText = text;
+            this._syncColors();
+        }, options);
     }
 
     setOnIcon(iconFile: string): void {

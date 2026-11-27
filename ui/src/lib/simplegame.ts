@@ -3,7 +3,7 @@
 import { on } from 'svelte/events';
 import { CollisionDetector } from './collision';
 import {setup as defaultSetup} from '../game';
-import { GameObject, gameClasses, type Enemy, type GameObjectClass, type Item, type Player, type Projectile } from './gameclasses';
+import { GameObject, gameClasses, resetTextMeasurementContext, type Enemy, type GameObjectClass, type Item, type Player, type Projectile } from './gameclasses';
 import type { Position2D, box2, matrix2 } from './util';
 
 
@@ -13,6 +13,35 @@ export const players : Player[] = [];
 export const enemies : Set<Enemy> = new Set();
 export const projectiles : Set<Projectile> = new Set();
 export const items : Set<Item> = new Set();
+
+/** Viewport dimensions in default-zoom HUD units. */
+export type ViewportSize = {
+    width: number;
+    height: number;
+};
+
+/** Current camera viewport in board units. */
+export type VisibleBoardBounds = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+
+/** A point in client CSS coordinates or canvas-local CSS coordinates. */
+export type InputPoint = {
+    x: number;
+    y: number;
+};
+
+/** Maps raw client coordinates to canvas-local CSS coordinates. */
+export type InputTransform = (clientPoint: InputPoint) => InputPoint;
+
+/** A game object that participates in layout invalidation and reflow. */
+export type LayoutParticipant = GameObject & {
+    layoutDirty: boolean;
+    layout(): void;
+};
 
 const tickWork : ((delta_t:number) => void)[] = [];
 const periodicWork : PeriodicWork[] = [];
@@ -48,8 +77,22 @@ let onPauseWork : (()=>void)[] = [];
 let onResumeWork : (()=>void)[] = [];
 const afterDrawWork : ((ctx: CanvasRenderingContext2D, offsetX: number, offsetY: number) => void)[] = [];
 
+/** Registered layout containers that may need a reflow. */
+const layoutParticipants : Set<LayoutParticipant> = new Set();
+/** Callbacks notified after the nominal viewport size changes. */
+const viewportResizeWork : Set<(size: ViewportSize) => void> = new Set();
+/** Whether the engine should observe the canvas CSS box and update the viewport. */
+let viewportAutoResize : boolean = true;
+/** Active ResizeObserver for automatic viewport updates. */
+let viewportResizeObserver : ResizeObserver | null = null;
+/** Window-resize fallback when ResizeObserver is unavailable. */
+let viewportResizeFallback : (() => void) | null = null;
+/** Optional host-provided client-to-canvas-CSS mapping. */
+let inputTransform : InputTransform | null = null;
+
 let ticksPerSecond = 40;
 let canvas: HTMLCanvasElement;
+let engineInitialized: boolean = false;
 let lastGameLoopTime : number;
 
 let gameLoopTimeout : number = -1;
@@ -160,6 +203,21 @@ function isVisible(obj: GameObject): boolean {
     return true;
 }
 
+/**
+ * Checks if an object or any of its attached ancestors is marked as HUD.
+ *
+ * HUD inheritance is OR-based: a child of a HUD container is effectively HUD
+ * even when its own `hud` flag is false.
+ */
+export function isHud(obj: GameObject): boolean {
+    let current: GameObject | null = obj;
+    while (current) {
+        if (current.hud) return true;
+        current = current.attachedTo;
+    }
+    return false;
+}
+
 function handleMouseDown(button: number, key: string, event: MouseEvent, boardX: number, boardY: number, screenX: number, screenY: number) {
     let initial = keyMap.has(key) ? !keyMap.get(key) : true;
     keyMap.set(key, true);
@@ -170,7 +228,7 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
         let bestZ = -Infinity;
 
         /* HUD objects — always checked first (they are on top), screen coords */
-        const hudObjects = [...gameObjects].filter(o => o.hud);
+        const hudObjects = [...gameObjects].filter(o => isHud(o));
         hudObjects.sort((a, b) => b.zIndex - a.zIndex);
         for (const obj of hudObjects) {
             if (!isVisible(obj)) continue;
@@ -188,7 +246,7 @@ function handleMouseDown(button: number, key: string, event: MouseEvent, boardX:
         /* Board objects — fall back if no HUD object captured the event */
         if (!best) {
             for (const obj of gameObjects) {
-                if (obj.hud) continue;
+                if (isHud(obj)) continue;
                 if (!isVisible(obj)) continue;
                 const hit = isPointInHitbox(obj, boardX, boardY);
                 if (hit) {
@@ -263,10 +321,18 @@ function handleMouseUp(button: number, key: string, event: MouseEvent, boardX: n
 
 
 /**
- * Register a callback to be called every tick
+ * Registers a callback to be called every game tick.
+ *
+ * The callback receives the elapsed time since the previous tick in seconds.
+ * Zero-argument callbacks remain assignable and are called normally.
+ *
+ * @param callback - Function invoked once per tick with `delta_t` in seconds
+ * @example
+ *   everyTick((delta_t) => {
+ *       player.x += player.velocityX * delta_t;
+ *   });
  */
-export function everyTick(callback : () => void) {
-    // Register a callback to be called every tick
+export function everyTick(callback : (delta_t: number) => void) {
     tickWork.push(callback);
 }
 
@@ -295,6 +361,262 @@ export function nextTick(work : () => void) : void {
 }
 
 /**
+ * Returns the viewport size in default-zoom HUD units.
+ *
+ * These are the units used by HUD layout and by board coordinates at 1x zoom.
+ * The value does not change when the zoom level changes.
+ */
+export function getHudSize(): ViewportSize {
+    return {
+        width: nominalWindowWidth,
+        height: nominalWindowHeight,
+    };
+}
+
+/**
+ * Returns the current camera viewport in board units.
+ *
+ * This changes when the camera pans or the zoom level changes.
+ */
+export function getVisibleBoardBounds(): VisibleBoardBounds {
+    return {
+        x: windowX,
+        y: windowY,
+        width: windowWidth,
+        height: windowHeight,
+    };
+}
+
+/**
+ * Registers a callback for nominal viewport size changes.
+ *
+ * The callback runs after the viewport dimensions and camera clamping are
+ * final. Zoom-only changes do not fire this callback.
+ *
+ * @param callback - Receives the new HUD/default-zoom viewport size
+ * @returns A function that removes the callback
+ */
+export function onViewportResize(
+    callback: (size: ViewportSize) => void
+): () => void {
+    viewportResizeWork.add(callback);
+    return () => {
+        viewportResizeWork.delete(callback);
+    };
+}
+
+/**
+ * Enables or disables automatic viewport observation of the canvas CSS box.
+ *
+ * Auto-resize is enabled by default. Disable it for games that use a fixed
+ * virtual resolution and scale the canvas purely with CSS.
+ *
+ * @param enabled - Whether to observe canvas size changes
+ */
+export function setViewportAutoResize(enabled: boolean): void {
+    viewportAutoResize = enabled;
+    if (!engineInitialized || !canvas) return;
+    if (enabled) {
+        startViewportAutoResize();
+    } else {
+        stopViewportAutoResize();
+    }
+}
+
+/**
+ * Registers a layout container for dirty-layout reflow.
+ *
+ * Registration is idempotent. The engine clears the registry during
+ * `clear()` and `destroyEngine()`.
+ *
+ * @param participant - Layout container that can be invalidated and laid out
+ */
+export function registerLayoutParticipant(
+    participant: LayoutParticipant
+): void {
+    layoutParticipants.add(participant);
+}
+
+/**
+ * Removes a layout container from dirty-layout reflow.
+ *
+ * Called automatically when a built-in layout container is destroyed.
+ *
+ * @param participant - Layout container to remove
+ */
+export function unregisterLayoutParticipant(
+    participant: LayoutParticipant
+): void {
+    layoutParticipants.delete(participant);
+}
+
+/**
+ * Marks every registered layout participant dirty.
+ *
+ * Used after viewport size changes so HUD and responsive layouts can reflow.
+ */
+function invalidateAllLayouts(): void {
+    for (const participant of layoutParticipants) {
+        participant.layoutDirty = true;
+    }
+}
+
+/**
+ * Returns how deeply a layout participant is nested inside other layout
+ * participants. Used to lay out inner containers before their ancestors.
+ */
+function layoutDepth(participant: LayoutParticipant): number {
+    let depth = 0;
+    let current: GameObject | null = participant.attachedTo;
+    while (current) {
+        if (layoutParticipants.has(current as LayoutParticipant)) {
+            depth++;
+        }
+        current = current.attachedTo;
+    }
+    return depth;
+}
+
+/**
+ * Checks whether any layout ancestor is dirty.
+ *
+ * A dirty root invalidates the layout tree below it for batching workflows
+ * where content fields are mutated directly and only the root is invalidated.
+ */
+function hasDirtyLayoutAncestor(participant: LayoutParticipant): boolean {
+    let current: GameObject | null = participant.attachedTo;
+    while (current) {
+        if (layoutParticipants.has(current as LayoutParticipant)) {
+            if ((current as LayoutParticipant).layoutDirty) {
+                return true;
+            }
+        }
+        current = current.attachedTo;
+    }
+    return false;
+}
+
+/**
+ * Reflows all dirty layout participants, deepest first.
+ *
+ * Layout containers also reflow when any layout ancestor is dirty, so a
+ * root-level invalidation refreshes nested layout containers as well.
+ * Each container clears its dirty flag before and after its layout pass.
+ */
+function reflowDirtyLayouts(): void {
+    const dirtyParticipants = [...layoutParticipants].filter(
+        participant =>
+            participant.layoutDirty ||
+            hasDirtyLayoutAncestor(participant)
+    );
+    dirtyParticipants.sort(
+        (a, b) => layoutDepth(b) - layoutDepth(a)
+    );
+    for (const participant of dirtyParticipants) {
+        if (!layoutParticipants.has(participant)) continue;
+        participant.layout();
+    }
+}
+
+/**
+ * Applies the host-provided pointer transform.
+ *
+ * The transform receives raw client CSS coordinates and must return
+ * canvas-local CSS coordinates. Pass `null` to restore the default
+ * `getBoundingClientRect()` mapping.
+ *
+ * @param transform - Coordinate transform, or `null` to clear it
+ */
+export function setInputTransform(
+    transform: InputTransform | null
+): void {
+    inputTransform = transform;
+}
+
+/**
+ * Converts raw client coordinates to canvas-local CSS coordinates.
+ */
+function clientToCanvasCss(
+    clientX: number,
+    clientY: number
+): InputPoint {
+    if (inputTransform) {
+        return inputTransform({ x: clientX, y: clientY });
+    }
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: clientX - rect.left,
+        y: clientY - rect.top,
+    };
+}
+
+/**
+ * Notifies registered callbacks that the nominal viewport size changed.
+ */
+function notifyViewportResize(): void {
+    const size = getHudSize();
+    for (const callback of [...viewportResizeWork]) {
+        callback(size);
+    }
+}
+
+/**
+ * Reads the canvas CSS size and updates the viewport when it changed.
+ */
+function syncViewportFromCanvas(): void {
+    if (!canvas) return;
+    const width = Math.round(canvas.clientWidth);
+    const height = Math.round(canvas.clientHeight);
+    if (width <= 0 || height <= 0) return;
+    if (
+        width === nominalWindowWidth &&
+        height === nominalWindowHeight &&
+        canvas.width === width &&
+        canvas.height === height
+    ) {
+        return;
+    }
+    setViewportSize(width, height);
+}
+
+/**
+ * Starts observing canvas CSS size changes.
+ */
+function startViewportAutoResize(): void {
+    stopViewportAutoResize();
+    if (!viewportAutoResize || !canvas) return;
+
+    if (typeof ResizeObserver !== "undefined") {
+        viewportResizeObserver = new ResizeObserver(() => {
+            syncViewportFromCanvas();
+        });
+        viewportResizeObserver.observe(canvas);
+        syncViewportFromCanvas();
+        return;
+    }
+
+    viewportResizeFallback = () => {
+        syncViewportFromCanvas();
+    };
+    window.addEventListener("resize", viewportResizeFallback);
+    syncViewportFromCanvas();
+}
+
+/**
+ * Stops observing canvas CSS size changes.
+ */
+function stopViewportAutoResize(): void {
+    if (viewportResizeObserver) {
+        viewportResizeObserver.disconnect();
+        viewportResizeObserver = null;
+    }
+    if (viewportResizeFallback) {
+        window.removeEventListener("resize", viewportResizeFallback);
+        viewportResizeFallback = null;
+    }
+}
+
+/**
  * Register a callback to be called periodically (every so many seconds)
  */
 export function periodically(seconds : number, callback : () => void) {
@@ -307,6 +629,7 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
     debugElement = debugDiv;
     debugElement.innerHTML = "";
     canvas = screenCanvas;
+    engineInitialized = true;
     windowWidth = canvas.width;
     windowHeight = canvas.height;
     nominalWindowWidth = canvas.width;
@@ -317,8 +640,14 @@ export function initEngine(screenCanvas: HTMLCanvasElement, debugDiv : HTMLDivEl
         stillNeedInitialMouseClick = false;
     }
 
-    /* Call the game's setup function */
+    /* Call the game's setup function before auto-resize so the game can opt out */
     setupFn();
+    if (!engineInitialized) return;
+
+    /* Observe the canvas after setup so setViewportAutoResize(false) works there */
+    if (viewportAutoResize) {
+        startViewportAutoResize();
+    }
 
     /* Draw the Click to begin screen if needed */
     if (clickToBegin) {
@@ -374,26 +703,48 @@ export function removeEventListeners() {
  *   setCanvas(newCanvas);
  */
 export function setCanvas(newCanvas: HTMLCanvasElement) {
+    stopViewportAutoResize();
     if (canvas) {
         removeEventListeners();
     }
     canvas = newCanvas;
+    if (!engineInitialized) return;
     attachEventListeners();
+
+    if (viewportAutoResize) {
+        const width = Math.round(canvas.clientWidth);
+        const height = Math.round(canvas.clientHeight);
+        if (width > 0 && height > 0) {
+            setViewportSize(width, height);
+        } else {
+            setViewportSize(nominalWindowWidth, nominalWindowHeight);
+        }
+        startViewportAutoResize();
+    } else {
+        // Preserve the established virtual resolution when swapping canvases.
+        setViewportSize(nominalWindowWidth, nominalWindowHeight);
+    }
+
+    if (gameHasStarted && isPaused()) {
+        redraw();
+    } else if (!gameHasStarted && stillNeedInitialMouseClick) {
+        drawClickToBegin();
+    }
 }
 
 function eventHandlerMouseMove(event : MouseEvent) {
-    const rect = canvas.getBoundingClientRect();
-    const fracX = (event.clientX - rect.left) / canvas.clientWidth;
-    const fracY = (event.clientY - rect.top) / canvas.clientHeight;
+    const point = clientToCanvasCss(event.clientX, event.clientY);
+    const fracX = point.x / canvas.clientWidth;
+    const fracY = point.y / canvas.clientHeight;
     mousePosition.x = windowWidth * fracX + windowX;
     mousePosition.y = windowHeight * fracY + windowY;
     screenMouseX = canvas.width * fracX;
     screenMouseY = canvas.height * fracY;
 
     if (dragCandidate && !dragTarget) {
-        const useScreen = dragCandidate.hud;
-        const startX = useScreen ? dragCandidateStartX : dragCandidateStartX;
-        const startY = useScreen ? dragCandidateStartY : dragCandidateStartY;
+        const useScreen = isHud(dragCandidate);
+        const startX = dragCandidateStartX;
+        const startY = dragCandidateStartY;
         const curX = useScreen ? screenMouseX : mousePosition.x;
         const curY = useScreen ? screenMouseY : mousePosition.y;
         const dx = curX - startX;
@@ -413,7 +764,7 @@ function eventHandlerMouseMove(event : MouseEvent) {
 
     if (dragTarget) {
         if (dragTarget.dragFollowsCursor) {
-            if (dragTarget.hud) {
+            if (isHud(dragTarget)) {
                 dragTarget.x = screenMouseX;
                 dragTarget.y = screenMouseY;
             } else {
@@ -429,8 +780,8 @@ function eventHandlerMouseMove(event : MouseEvent) {
 
     // Board panning: compute delta in viewport-fraction space, convert to board units
     if (boardPanning) {
-        const currentFracX = (event.clientX - rect.left) / canvas.clientWidth;
-        const currentFracY = (event.clientY - rect.top) / canvas.clientHeight;
+        const currentFracX = point.x / canvas.clientWidth;
+        const currentFracY = point.y / canvas.clientHeight;
         const deltaFracX = currentFracX - boardPanStartViewportFracX;
         const deltaFracY = currentFracY - boardPanStartViewportFracY;
         windowX = Math.max(0, Math.min(boardWidth - windowWidth, boardPanStartWindowX - deltaFracX * windowWidth * boardPanRate));
@@ -445,9 +796,9 @@ function eventHandlerMouseMove(event : MouseEvent) {
 
 function eventHandlerMouseDown(event : MouseEvent) {
     stillNeedInitialMouseClick = false;
-    const rect = canvas.getBoundingClientRect();
-    const fracX = (event.clientX - rect.left) / canvas.clientWidth;
-    const fracY = (event.clientY - rect.top) / canvas.clientHeight;
+    const point = clientToCanvasCss(event.clientX, event.clientY);
+    const fracX = point.x / canvas.clientWidth;
+    const fracY = point.y / canvas.clientHeight;
     const boardX = windowWidth * fracX + windowX;
     const boardY = windowHeight * fracY + windowY;
     const screenX = canvas.width * fracX;
@@ -455,7 +806,7 @@ function eventHandlerMouseDown(event : MouseEvent) {
 
     if (event.buttons & 1) {
         /* HUD drag candidates — screen coords, topmost z first */
-        const hudDrags = [...gameObjects].filter(o => o.hud && o.draggable && o.canDrag() && !o.isDragging);
+        const hudDrags = [...gameObjects].filter(o => isHud(o) && o.draggable && o.canDrag() && !o.isDragging);
         hudDrags.sort((a, b) => b.zIndex - a.zIndex);
         for (const obj of hudDrags) {
             if (!dragTarget && !dragCandidate && isPointInHitbox(obj, screenX, screenY) && isVisible(obj)) {
@@ -470,7 +821,7 @@ function eventHandlerMouseDown(event : MouseEvent) {
         /* Board drag candidates — existing logic */
         if (!dragCandidate) {
             for (const obj of [...gameObjects]) {
-                if (obj.hud) continue;
+                if (isHud(obj)) continue;
                 if (obj.draggable && obj.canDrag() && !obj.isDragging && !dragTarget && !dragCandidate && isPointInHitbox(obj, boardX, boardY) && isVisible(obj)) {
                     dragCandidate = obj;
                     dragButton = 0;
@@ -490,8 +841,8 @@ function eventHandlerMouseDown(event : MouseEvent) {
     // Board panning: start on left-click when nothing captured it
     if (boardPanEnabled && (event.buttons & 1) && !dragCandidate && !mouseOwner.has(0) && !boardPanning) {
         boardPanning = true;
-        boardPanStartViewportFracX = (event.clientX - rect.left) / canvas.clientWidth;
-        boardPanStartViewportFracY = (event.clientY - rect.top) / canvas.clientHeight;
+        boardPanStartViewportFracX = fracX;
+        boardPanStartViewportFracY = fracY;
         boardPanStartWindowX = windowX;
         boardPanStartWindowY = windowY;
         boardPanCursorOriginal = canvas.style.cursor;
@@ -500,9 +851,9 @@ function eventHandlerMouseDown(event : MouseEvent) {
 }
 
 function eventHandlerMouseUp(event : MouseEvent) {
-    const rect = canvas.getBoundingClientRect();
-    const boardX = windowWidth * ((event.clientX - rect.left) / canvas.clientWidth) + windowX;
-    const boardY = windowHeight * ((event.clientY - rect.top) / canvas.clientHeight) + windowY;
+    const point = clientToCanvasCss(event.clientX, event.clientY);
+    const boardX = windowWidth * (point.x / canvas.clientWidth) + windowX;
+    const boardY = windowHeight * (point.y / canvas.clientHeight) + windowY;
 
     // Board panning: end on left-button release, suppress click
     if (boardPanning && !(event.buttons & 1)) {
@@ -545,14 +896,13 @@ function eventHandlerMouseUp(event : MouseEvent) {
 function eventHandlerTouchStart(event: TouchEvent): void {
     if (zoomEnabled && event.touches.length === 2) {
         if (dragCandidate) {
-            const synth = new MouseEvent('mouseup', { clientX: 0, clientY: 0, button: 0, buttons: 0 });
+            const touch = event.touches[0];
+            const synth = new MouseEvent('mouseup', { clientX: touch.clientX, clientY: touch.clientY, button: 0, buttons: 0 });
             canvas.dispatchEvent(synth);
         }
         if (mouseOwner.has(0)) {
-            const rect = canvas.getBoundingClientRect();
-            const bx = windowWidth * 0.5 + windowX;
-            const by = windowHeight * 0.5 + windowY;
-            const synth = new MouseEvent('mouseup', { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0, buttons: 0 });
+            const touch = event.touches[0];
+            const synth = new MouseEvent('mouseup', { clientX: touch.clientX, clientY: touch.clientY, button: 0, buttons: 0 });
             canvas.dispatchEvent(synth);
         }
         if (boardPanning) {
@@ -561,13 +911,12 @@ function eventHandlerTouchStart(event: TouchEvent): void {
             boardPanSuppressClick = false;
         }
         pinchActive = true;
-        const t0 = event.touches[0];
-        const t1 = event.touches[1];
-        pinchStartDistance = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        const p0 = clientToCanvasCss(event.touches[0].clientX, event.touches[0].clientY);
+        const p1 = clientToCanvasCss(event.touches[1].clientX, event.touches[1].clientY);
+        pinchStartDistance = Math.hypot(p1.x - p0.x, p1.y - p0.y);
         pinchStartZoomLevel = zoomLevel;
-        const rect = canvas.getBoundingClientRect();
-        pinchMidFracX = ((t0.clientX + t1.clientX) / 2 - rect.left) / canvas.clientWidth;
-        pinchMidFracY = ((t0.clientY + t1.clientY) / 2 - rect.top) / canvas.clientHeight;
+        pinchMidFracX = ((p0.x + p1.x) / 2) / canvas.clientWidth;
+        pinchMidFracY = ((p0.y + p1.y) / 2) / canvas.clientHeight;
         event.preventDefault();
         return;
     }
@@ -586,9 +935,9 @@ function eventHandlerTouchMove(event: TouchEvent): void {
     if (pinchActive) {
         event.preventDefault();
         if (event.touches.length >= 2) {
-            const t0 = event.touches[0];
-            const t1 = event.touches[1];
-            const currentDistance = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+            const p0 = clientToCanvasCss(event.touches[0].clientX, event.touches[0].clientY);
+            const p1 = clientToCanvasCss(event.touches[1].clientX, event.touches[1].clientY);
+            const currentDistance = Math.hypot(p1.x - p0.x, p1.y - p0.y);
             const ratio = currentDistance / pinchStartDistance;
             const newZoom = Math.max(zoomMin, Math.min(zoomMax, pinchStartZoomLevel * ratio));
             if (newZoom === zoomLevel) return;
@@ -605,9 +954,12 @@ function eventHandlerTouchMove(event: TouchEvent): void {
             windowY = Math.max(0, Math.min(boardHeight - windowHeight, windowY));
 
             zoomLevel = newZoom;
-            const rect = canvas.getBoundingClientRect();
-            mousePosition.x = windowWidth * ((t0.clientX + t1.clientX) / 2 - rect.left) / canvas.clientWidth + windowX;
-            mousePosition.y = windowHeight * ((t0.clientY + t1.clientY) / 2 - rect.top) / canvas.clientHeight + windowY;
+            const midFracX = ((p0.x + p1.x) / 2) / canvas.clientWidth;
+            const midFracY = ((p0.y + p1.y) / 2) / canvas.clientHeight;
+            mousePosition.x = windowWidth * midFracX + windowX;
+            mousePosition.y = windowHeight * midFracY + windowY;
+            screenMouseX = canvas.width * midFracX;
+            screenMouseY = canvas.height * midFracY;
         }
         return;
     }
@@ -642,9 +994,9 @@ function eventHandlerWheel(event: WheelEvent): void {
     if (!zoomEnabled) return;
     event.preventDefault();
 
-    const rect = canvas.getBoundingClientRect();
-    const fracX = (event.clientX - rect.left) / canvas.clientWidth;
-    const fracY = (event.clientY - rect.top) / canvas.clientHeight;
+    const point = clientToCanvasCss(event.clientX, event.clientY);
+    const fracX = point.x / canvas.clientWidth;
+    const fracY = point.y / canvas.clientHeight;
 
     const delta = event.deltaY > 0 ? -zoomStep : zoomStep;
     const newZoom = Math.max(zoomMin, Math.min(zoomMax, zoomLevel + delta));
@@ -664,6 +1016,8 @@ function eventHandlerWheel(event: WheelEvent): void {
     zoomLevel = newZoom;
     mousePosition.x = windowWidth * fracX + windowX;
     mousePosition.y = windowHeight * fracY + windowY;
+    screenMouseX = canvas.width * fracX;
+    screenMouseY = canvas.height * fracY;
 }
 
 function eventHandlerKeyDown(event : KeyboardEvent) {
@@ -712,6 +1066,8 @@ function allClassesLoaded() : boolean {
  * The main game loop
  */
 function mainGameLoop() {
+    if (!engineInitialized) return;
+
     /* Check for initial input */
     if(stillNeedInitialMouseClick) {
         gameLoopTimeout = setTimeout(mainGameLoop, 1000/ticksPerSecond);
@@ -733,6 +1089,8 @@ function mainGameLoop() {
         }
     }
 
+    if (!engineInitialized) return;
+
     /* The click-to-start screen and asset loading have both completed. */
     gameHasStarted = true;
 
@@ -747,37 +1105,49 @@ function mainGameLoop() {
     // console.log("delta_t:", delta_t);
 
     updateDurations(delta_t);
+    if (!engineInitialized) return;
 
     // User Input
     userInput();
+    if (!engineInitialized) return;
 
     // Move the objects
     moveObjects(delta_t);
+    if (!engineInitialized) return;
 
     // Detect Collisions
     let cd = doCollisionDetection();
+    if (!engineInitialized) return;
 
     // Take tick actions
     for(const work of tickWork) {
         work(delta_t);
     }
+    if (!engineInitialized) return;
 
     // Consider timed actions
     for(const work of periodicWork) {
         work.timeElapsed(delta_t);
     }
+    if (!engineInitialized) return;
 
     // Run one-shot work queued for this tick
     for(const work of dueNextTickWork) {
         work();
     }
     dueNextTickWork.length = 0;
+    if (!engineInitialized) return;
+
+    // Reflow dirty layout containers before camera update and rendering
+    reflowDirtyLayouts();
+    if (!engineInitialized) return;
 
     /* Update the camera */
     updateCamera(delta_t);
 
     // draw
     draw();
+    if (!engineInitialized) return;
 
     // dsdebugDrawBoundingBoxes(cd);
 
@@ -856,7 +1226,7 @@ function draw() {
 
     /* Objects */
     for(const object of [...gameObjects].sort((a, b) => a.zIndex - b.zIndex)) {
-        if (object.hud) continue;
+        if (isHud(object)) continue;
         if (isVisible(object)) {
             object.draw(ctx, windowX, windowY);
         }
@@ -872,7 +1242,7 @@ function draw() {
     }
 
     /* HUD objects — screen coordinates, no zoom, no camera offset */
-    const hudObjects = [...gameObjects].filter(o => o.hud);
+    const hudObjects = [...gameObjects].filter(o => isHud(o));
     hudObjects.sort((a, b) => a.zIndex - b.zIndex);
     for(const object of hudObjects) {
         if (isVisible(object)) {
@@ -1012,7 +1382,7 @@ function detectHover() {
             continue;
         }
         const wasHovered = obj.isHovered;
-        obj.isHovered = obj.hud
+        obj.isHovered = isHud(obj)
             ? isPointInHitbox(obj, screenMouseX, screenMouseY)
             : isPointInHitbox(obj, mousePosition.x, mousePosition.y);
         if (buttonDebugLevel >= 10) {
@@ -1078,6 +1448,7 @@ export function pauseGame(): void {
 }
 
 export function resumeGame(): void {
+    if (!engineInitialized) return;
     if (gameLoopTimeout >= 0) return;
     for (const work of onResumeWork) work();
     lastGameLoopTime = Date.now() - 1000 / ticksPerSecond;
@@ -1108,6 +1479,7 @@ export function isPaused(): boolean {
  */
 export function redraw(): void {
     if (!canvas || !gameHasStarted) return;
+    reflowDirtyLayouts();
     draw();
 }
 
@@ -1135,12 +1507,17 @@ function doCollisionDetection() : CollisionDetector{
     for(const action of collisionActions) {
         const source = action.sourceGameObject;
         if (!source) continue;
+        if (isHud(source)) continue;
 
         if (source.singleCollisionOnly && alreadyCollided.has(source)) continue;
 
         if(action.targetGameClass) {
             const tag = action.targetGameClass.name;
-            detector.buildTree(tag, action.targetGameClass.getAllGameObjects(new Set<GameObject>()));
+            const targets = new Set(
+                [...action.targetGameClass.getAllGameObjects(new Set<GameObject>())]
+                    .filter(target => !isHud(target))
+            );
+            detector.buildTree(tag, targets);
             const collisions = detector.detectCollisions([source], [tag]);
             for(const collision of collisions) {
                 action.work(source, collision);
@@ -1151,7 +1528,7 @@ function doCollisionDetection() : CollisionDetector{
             }
         }
 
-        if(action.targetGameObject) {
+        if(action.targetGameObject && !isHud(action.targetGameObject)) {
             const objDetector = new CollisionDetector(boardWidth, boardHeight);
             if(objDetector.collides(source, action.targetGameObject)) {
                 action.work(source, action.targetGameObject);
@@ -1347,14 +1724,44 @@ export function setCameraPosition(centerX: number, centerY: number): void {
  *   setViewportSize(1920, 1080);  // 16:9 widescreen viewport
  */
 export function setViewportSize(width: number, height: number): void {
-    canvas.width = width;
-    canvas.height = height;
-    nominalWindowWidth = width;
-    nominalWindowHeight = height;
+    if (!engineInitialized || !canvas) return;
+    if (
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width <= 0 ||
+        height <= 0
+    ) {
+        return;
+    }
+
+    const normalizedWidth = Math.max(1, Math.round(width));
+    const normalizedHeight = Math.max(1, Math.round(height));
+    if (
+        normalizedWidth === nominalWindowWidth &&
+        normalizedHeight === nominalWindowHeight &&
+        canvas.width === normalizedWidth &&
+        canvas.height === normalizedHeight
+    ) {
+        return;
+    }
+
+    canvas.width = normalizedWidth;
+    canvas.height = normalizedHeight;
+    nominalWindowWidth = normalizedWidth;
+    nominalWindowHeight = normalizedHeight;
     windowWidth = nominalWindowWidth / zoomLevel;
     windowHeight = nominalWindowHeight / zoomLevel;
     windowX = Math.max(0, Math.min(boardWidth - windowWidth, windowX));
     windowY = Math.max(0, Math.min(boardHeight - windowHeight, windowY));
+
+    invalidateAllLayouts();
+    notifyViewportResize();
+
+    if (gameHasStarted && isPaused()) {
+        redraw();
+    } else if (!gameHasStarted && stillNeedInitialMouseClick) {
+        drawClickToBegin();
+    }
 }
 
 /**
@@ -1399,6 +1806,10 @@ export function setBackground(tiles: string[], whenLoaded: ()=>void = ()=>{}) {
 export function setBoardSize(width : number, height : number) {
     boardWidth = width;
     boardHeight = height;
+    invalidateAllLayouts();
+    if (gameHasStarted && isPaused()) {
+        redraw();
+    }
 }
 
 /**
@@ -1413,6 +1824,10 @@ export function setBoardSize(width : number, height : number) {
 export function setSize(width: number, height: number) {
     boardWidth = width;
     boardHeight = height;
+    invalidateAllLayouts();
+    if (gameHasStarted && isPaused()) {
+        redraw();
+    }
 }
 
 /**
@@ -1427,7 +1842,7 @@ export function setSize(width: number, height: number) {
  */
 export function clear() {
     for (const obj of [...gameObjects]) {
-        obj.gameclass.destroy(obj);
+        obj.destroy();
     }
     gameObjects.clear();
     players.length = 0;
@@ -1435,15 +1850,33 @@ export function clear() {
     projectiles.clear();
     items.clear();
     collisionActions.length = 0;
+    layoutParticipants.clear();
     for (const gc of gameClasses) {
         gc.gameObjects.clear();
     }
     dragTarget = null;
     dragCandidate = null;
     dragButton = -1;
+    dragCandidateStartX = 0;
+    dragCandidateStartY = 0;
     mouseOwner.clear();
+    if (boardPanning && canvas) {
+        canvas.style.cursor = boardPanCursorOriginal;
+    }
     boardPanning = false;
+    boardPanCursorOriginal = '';
     boardPanSuppressClick = false;
+    pinchActive = false;
+    pinchStartDistance = 0;
+    pinchStartZoomLevel = 1.0;
+    pinchMidFracX = 0;
+    pinchMidFracY = 0;
+    screenMouseX = 0;
+    screenMouseY = 0;
+    mousePosition = { x: 0, y: 0 };
+    keyMap.clear();
+    keyMapTimes.clear();
+    keyEvents.length = 0;
     windowX = 0;
     windowY = 0;
     if (zoomEnabled) {
@@ -1480,11 +1913,17 @@ export function clear() {
  *   }, []);
  */
 export function destroyEngine(): void {
+    engineInitialized = false;
     // Stop the game loop
     if (gameLoopTimeout >= 0) {
         clearTimeout(gameLoopTimeout);
         gameLoopTimeout = -1;
     }
+
+    // Stop viewport observation and input transforms
+    stopViewportAutoResize();
+    viewportAutoResize = true;
+    inputTransform = null;
 
     // Remove DOM event listeners from the canvas
     if (canvas) {
@@ -1498,10 +1937,13 @@ export function destroyEngine(): void {
     tickWork.length = 0;
     periodicWork.length = 0;
     nextTickWork.length = 0;
+    dueNextTickWork.length = 0;
     onLoadedWork.length = 0;
     onPauseWork.length = 0;
     onResumeWork.length = 0;
     afterDrawWork.length = 0;
+    viewportResizeWork.clear();
+    layoutParticipants.clear();
     onKeyDownMap.clear();
     onKeyUpMap.clear();
     onMouseClickMap.clear();
@@ -1511,18 +1953,30 @@ export function destroyEngine(): void {
     keyMapTimes.clear();
     keyEvents.length = 0;
     mouseDownTimes.clear();
+    mouseOwner.clear();
     mousePosition = { x: 0, y: 0 };
+    screenMouseX = 0;
+    screenMouseY = 0;
+    dragTarget = null;
+    dragCandidate = null;
+    dragButton = -1;
+    dragCandidateStartX = 0;
+    dragCandidateStartY = 0;
 
     // Clear game classes (images get GC'd when user's refs are dropped)
     gameClasses.length = 0;
 
-    // Clear background
+    // Clear background and shared measurement resources
     backgroundTileset = [];
+    resetTextMeasurementContext();
 
-    // Reset engine flags
+    // Reset engine flags and loop/config state
     notAllClassesAreLoaded = true;
     stillNeedInitialMouseClick = true;
     gameHasStarted = false;
+    buttonDebugLevel = 0;
+    ticksPerSecond = 40;
+    lastGameLoopTime = 0;
 
     // Reset camera/board/window to defaults
     boardWidth = 10000;
@@ -1540,5 +1994,25 @@ export function destroyEngine(): void {
     zoomMax = 3.0;
     zoomStep = 0.1;
     pinchActive = false;
-    canvas.style.cursor = '';
+    pinchStartDistance = 0;
+    pinchStartZoomLevel = 1.0;
+    pinchMidFracX = 0;
+    pinchMidFracY = 0;
+    boardPanning = false;
+    boardPanStartViewportFracX = 0;
+    boardPanStartViewportFracY = 0;
+    boardPanStartWindowX = 0;
+    boardPanStartWindowY = 0;
+    boardPanSuppressClick = false;
+    boardPanCursorOriginal = '';
+    viewportAutoResize = true;
+    windowWidth = 1000;
+    windowHeight = 1000;
+    nominalWindowWidth = 1000;
+    nominalWindowHeight = 1000;
+    windowX = 0;
+    windowY = 0;
+    if (canvas) {
+        canvas.style.cursor = '';
+    }
 }

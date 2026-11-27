@@ -56,7 +56,10 @@ board is defined by `boardWidth` × `boardHeight` (set via `setBoardSize()`).
 
 - All positions (`GameObject.x`, `GameObject.y`, `createText` coordinates,
   `center` in `circleAround`, etc.) and distances (`radius`, `width`,
-  `height`, `padding`, `gutter`, `velocity`) are in **board units**.
+  `height`, `padding`, `gutter`, `velocity`) are in **board units**, except for
+  objects whose `hud` flag is true (including inherited HUD objects). HUD
+  objects use viewport-relative **default-zoom units**, which match board units
+  at 1× zoom.
 - The canvas is a **viewport** into the board. The engine draws objects at
   `(object.x - windowX, object.y - windowY)` canvas pixels, where
   `windowX`/`windowY` are the current scroll offset.
@@ -67,6 +70,19 @@ board is defined by `boardWidth` × `boardHeight` (set via `setBoardSize()`).
 
 Board units have no inherent physical scale — you choose what one unit
 represents (e.g., 1 pixel, 1 metre, 1 tile).
+
+### Viewport units
+
+There are two distinct viewport measurements:
+
+- `getVisibleBoardBounds()` returns the current camera view in **board units**.
+  It changes with panning and zoom.
+- `getHudSize()` returns the viewport in **default-zoom HUD units**. It changes
+  with canvas resizing, but not with zoom.
+
+The engine observes canvas CSS size by default and updates the logical viewport
+on browser resize or orientation change. Disable this for fixed virtual
+resolution with `setViewportAutoResize(false)`.
 
 ---
 
@@ -154,7 +170,7 @@ If you don't pass a setup function, `initEngine` uses the one exported from
 | Function | Description |
 |---|---|
 | `whenLoaded(fn)` | Fires once when all game classes have loaded their images. |
-| `everyTick(fn)` | Registers a callback invoked every frame (~40 fps). |
+| `everyTick(fn)` | Registers a callback invoked every frame (~40 fps). The callback receives `delta_t` in seconds. |
 | `nextTick(fn)` | Registers a one-shot callback to run in the next game tick, after normal tick callbacks and before rendering. Does not run while paused. |
 | `periodically(seconds, fn)` | Registers a callback invoked at a fixed interval. |
 | `onPause(fn)` | Fires when the game is paused (`pauseGame()`, `togglePause()`, or p key). |
@@ -262,8 +278,14 @@ import { initEngine, destroyEngine } from "./lib/simplegame";
 
 For resetting game state without tearing down the engine (e.g. restarting a
 level), use `clear()` instead. `clear()` keeps the game loop running,
-preserves registered callbacks, and keeps event listeners intact — it only
-removes game objects and resets the camera.
+preserves registered callbacks, and keeps event listeners intact. It removes
+game objects, resets the camera and viewport offset, drops pending `nextTick()`
+work, and clears the layout-participant registry.
+
+`destroyEngine()` resets all internal engine state, disconnects the automatic
+viewport observer, removes listeners, clears layout registries, and clears the
+input transform. The host-owned `canvas` and `debugElement` references are not
+nulled or disposed.
 
 ---
 
@@ -274,7 +296,7 @@ removes game objects and resets the camera.
 | Export | Kind | Description |
 |---|---|---|
 | `initEngine(canvas, debugDiv, clickToBegin?, setupFn?)` | function | Boot the engine. Must be called once. |
-| `setCanvas(newCanvas)` | function | Swap the rendering canvas. |
+| `setCanvas(newCanvas)` | function | Swap the rendering canvas. Preserves the viewport, repaints a paused frame, and redraws the click-to-begin screen before start. |
 | `attachEventListeners()` | function | Bind keyboard/mouse to the current canvas. |
 | `removeEventListeners()` | function | Unbind keyboard/mouse from the current canvas. |
 | `setBoardSize(width, height)` | function | Set the virtual world size. |
@@ -288,14 +310,20 @@ removes game objects and resets the camera.
 | `setZoomEnabled(enabled, min?, max?, step?)` | function | Enable mouse-wheel and pinch-to-zoom (default `false`). `min`/`max`/`step` default to `0.5`/`3.0`/`0.1`. Disabling resets to 1×. |
 | `setZoomLevel(level)` | function | Programmatic zoom (clamped to min/max). `1.0` = native. |
 | `getZoomLevel()` | function | Returns current zoom factor (`number`). |
+| `getHudSize()` | function | Returns `{ width, height }` in default-zoom HUD units. Does not change with zoom. |
+| `getVisibleBoardBounds()` | function | Returns `{ x, y, width, height }` for the current camera viewport in board units. |
+| `onViewportResize(fn)` | function | Register a callback for nominal viewport size changes. Returns an unsubscribe function. Zoom-only changes do not fire it. |
+| `setViewportAutoResize(enabled)` | function | Enable/disable `ResizeObserver` viewport updates. Default `true`. |
+| `setInputTransform(transform)` | function | Map raw client CSS coordinates to canvas-local CSS coordinates. Pass `null` to reset. |
+| `registerLayoutParticipant(participant)` | function | Register a custom layout container for engine reflow. Built-in containers register automatically. |
 | `setBackground(tiles, whenLoaded?)` | function | Set background from image URLs. |
 | `setBackgroundMode(mode)` | function | `"tile"` (default, scrolls with camera) or `"stretch"` (fills viewport, no scroll). |
 | `setBackgroundTileSize(width, height)` | function | Tile size in board coordinates for tiled backgrounds. Both dimensions required; images scaled to fit. Tile mode only. |
-| `clear()` | function | Remove all game objects, reset camera, and discard pending `nextTick()` work. Use for level restart. Keeps engine running. |
-| `destroyEngine()` | function | Full teardown. Stops loop, removes listeners, clears callbacks, game state. Engine must be re-initialised with `initEngine()` afterwards. |
+| `clear()` | function | Remove all game objects, reset camera, discard pending `nextTick()` work, and clear layout participants. Use for level restart. Keeps engine running. |
+| `destroyEngine()` | function | Full teardown of internal engine state. Stops loop, removes listeners, disconnects viewport observation, clears callbacks, layout registries, input transform, and game state. `canvas` / `debugElement` references are retained as external host state. Engine must be re-initialised with `initEngine()` afterwards. |
 | `debug(text)` | function | Write to the debug div. |
 | `getMousePosition()` | function | Get current mouse coordinates on the board. |
-| `everyTick(fn)` | function | Register a per-frame callback. |
+| `everyTick(fn)` | function | Register a per-frame callback. The callback receives `delta_t` in seconds; zero-argument callbacks are still valid. |
 | `nextTick(fn)` | function | Register a one-shot callback for the next game tick. Runs after normal tick callbacks and before rendering; waits while paused. |
 | `periodically(seconds, fn)` | function | Register a timed callback. |
 | `whenLoaded(fn)` | function | Callback when all images are loaded. |
@@ -325,7 +353,7 @@ removes game objects and resets the camera.
 | Export | Kind | Description |
 |---|---|---|
 | `GameObjectClass` | class | Base class for object types. Defines image, instance defaults (`defaultSpeed`, `defaultWidth`, `defaultHeight`, `defaultHitpoints`), hitbox defaults (`hitboxWidth`/`hitboxHeight`/`hitboxXOffset`/`hitboxYOffset`), and class-level behaviour (`defaultSingleCollisionOnly`, `defaultSpriteForwardVector`, `defaultSpriteUpVector`, `defaultSpriteAlignmentMode`, `defaultSpriteReflectionHysteresisDeg`). Key methods: `setDefaultSpeed()`, `setBoundingBox()`, `addDamageSprite()`, `onCollisionWith()`, `onDestroy()`. Each class tracks its alive instances in a `gameObjects` Set. |
-| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `visible`, `opacity`, `zIndex`, `draggable`, `hud`, `lockOrientation`, `worldUpVector`, `spriteForwardVector`, `spriteUpVector`, `spriteAlignmentMode`, `spriteReflectionHysteresisDeg`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
+| `GameObject` | class | Base game object. Provides mouse events (`onClick`, `onMouseDown`, `onMouseUp`, `onMouseOver`, `onMouseOut`), drag (`onDragStart`/`onDrag`/`onDragEnd`), collision registration (`onCollisionWith`, `onCollisionWithParticular`, `onCollisionWithEnemy`), movement (`moveTo`, `move`, `setLocation`, `circleAround`), orientation (`setOrientation`, `setOrientationRadians`, `setOrientationTowards`), life-cycle (`setMaxDuration`, `onDestroy`, `onArrival`), attachments (`attach`/`detach`), layout (`getLayoutWidth`, `getLayoutHeight`, `getLayoutOffsetX`, `getLayoutOffsetY`, `setLayoutMinWidth`, `setLayoutMinHeight`, `invalidateLayout`), and debug (`logMovement`). Key fields: `var` (user data), `speed`/`velocity`/`acceleration`, `width`/`height`, `layoutMinWidth`/`layoutMinHeight`, `visible`, `opacity`, `zIndex`, `draggable`, `hud`, `lockOrientation`, `worldUpVector`, `spriteForwardVector`, `spriteUpVector`, `spriteAlignmentMode`, `spriteReflectionHysteresisDeg`, `boundToBoard`, `destroyIfOffBoard`, `fadeInMillis`/`fadeOutMillis`/`growInMillis`/`growOutMillis`, `maxDurationMillis`, `decelerationDistance`/`decelerationTime`. |
 | `PlayerClass` / `Player` | class | Player-controllable object with keyboard input (`enableArrowKeysMovement`, `enableWasdKeysMovement`). Uses `speed` as max cap, `acceleration` as ramp time, and `x_speed`/`y_speed` for axis movement. Overrides `standardMovement = false`. |
 | `EnemyClass` / `Enemy` | class | Enemy object with hitpoints. |
 | `ProjectileClass` / `Projectile` | class | Projectile object. Has `alignToTravel` (default `true`) which recalculates facing direction from actual movement each frame. |
@@ -369,12 +397,14 @@ removes game objects and resets the camera.
 | `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
 | `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`, `cornerRadius`, `foregroundColor`. |
 | `ToggleButtonOptions` | Extends `ButtonOptions`. Adds: `toggled`, `onColor`, `offColor`, `onForegroundColor`, `offForegroundColor`, `onText`, `offText`, `onIcon`, `offIcon`, `onBorderHighlight`, `onBorderHighlightColor`. |
-| `LayoutContainer` | Base class for `Row`, `Column`, `Page`, `ScrollablePage`. Provides `padding`, `gutter`, `borderWidth`/`borderColor`, `setJustify()`, `setAlign()`, `addChild()`/`removeChild()`, `layout()`. |
+| `LayoutContainer` | Base class for `Row`, `Column`, and `HudLayout`. Provides `padding`, `gutter`, `borderWidth`/`borderColor`, `setJustify()`, `setAlign()`, `setWidth()`/`setHeight()`, `invalidateLayout()`, `addChild()`/`removeChild()`, `layout()`. |
 | `LayoutJustify` | Enum: `START`, `CENTER`, `END`, `SPACE_BETWEEN`, `SPACE_AROUND`. |
 | `LayoutAlign` | Enum: `START`, `CENTER`, `END`, `STRETCH`. |
-| `Row` | Horizontal layout container (extends `LayoutContainer`). |
-| `Column` | Vertical layout container (extends `LayoutContainer`). |
-| `Page` | Page container with `topRow`, `bottomRow`, `leftColumn`, `rightColumn`, `centerColumn` sub-containers. |
+| `Row` | Horizontal layout container. Supports optional wrapping with `setWrap()`, `setLineGap()`, and `setMaxWidth()`. |
+| `Column` | Vertical layout container. |
+| `Page` | Board-space page with `topRow`, `bottomRow`, `leftColumn`, `rightColumn`, `centerColumn` sub-containers. Participates in reflow. |
+| `ScrollablePage` | Board-space scrollable page with top/bottom/left/right regions and `setContentHeight()` / `scroll()`. |
+| `HudLayout` | Viewport-relative HUD border layout with `top`, `bottom`, `left`, `right`, and free-form `center` regions. See `hud-layout.ts`. |
 | `ScrollablePage` | Scrollable page container with `scrollOffset`, `scrollbar`, `setContentHeight()`, `scroll(delta)`. |
 
 ---
@@ -557,7 +587,7 @@ The `isHovered` boolean is updated every frame for all game objects.
 
 | Member | Description |
 |---|---|---|
-| `setText(text)` | Change the button label. |
+| `setText(text, options?)` | Change the button label. Fixed-size buttons normally do not invalidate layout. |
 | `setOnClick(callback)` | Register a click handler. |
 | `setDisabled(disabled)` | Enable/disable the button. |
 | `setIcon(iconFile)` | Set or replace the icon image. |
@@ -722,15 +752,15 @@ non-overlapping triangles covering the entire region.
 
 ## HUD (Screen-Space Objects)
 
-Set `hud = true` on any `GameObject` to position it in canvas-pixel (screen)
-coordinates instead of board coordinates. HUD objects stay fixed on screen
-regardless of camera movement, zoom, or panning.
+Set `hud = true` on any `GameObject` to position it in viewport-relative
+default-zoom coordinates instead of board coordinates. HUD objects stay fixed
+on screen regardless of camera movement, zoom, or panning.
 
 ```typescript
 import { createText } from "./lib/gameclasses";
 
 const healthLabel = createText("HP: 100", { x: 10, y: 10 });
-healthLabel.hud = true;    // (10, 10) is now a screen pixel, not a board unit
+healthLabel.hud = true;    // (10, 10) is now a viewport-relative HUD unit
 healthLabel.zIndex = 100;  // high z so it sits above board objects
 ```
 
@@ -739,12 +769,102 @@ HUD objects:
 - Are drawn **after** all board objects (always on top) and after `afterDraw` callbacks.
 - Receive mouse input **before** board objects (highest `zIndex` first).
 - Ignore the zoom transform — they render at native canvas scale.
+- Use **default-zoom board units** as their coordinate unit. At 1× zoom this is
+  the same as board units and canvas pixels; zooming the board does not resize
+  the HUD.
+- Inherit HUD status through `attachedTo`. Setting `hud = true` on one container
+  makes all attached descendants HUD.
+- Are excluded from board collision detection.
 - Support the full `GameObject` feature set: mouse events, dragging, opacity,
   `drawOverlay`, progress bars, tooltips, etc.
 
 > **Note:** HUD objects still run the normal movement system. Avoid
 > `boundToBoard` / `destroyIfOffBoard` on HUD objects — they clamp and destroy
 > against *board* bounds, not screen bounds.
+
+### HUD and viewport sizes
+
+Use `getHudSize()` for HUD layout. It returns default-zoom units and does not
+change when zoom changes:
+
+```typescript
+import { getHudSize, getVisibleBoardBounds } from "./lib/simplegame";
+
+const hudSize = getHudSize();                 // HUD/default-zoom units
+const boardView = getVisibleBoardBounds();    // current camera view in board units
+```
+
+The canvas is observed automatically by default. A browser resize or phone
+orientation change updates the viewport, invalidates layouts, and reflows them.
+Disable this for fixed virtual-resolution games:
+
+```typescript
+import { setViewportAutoResize } from "./lib/simplegame";
+
+// Safe to call before initEngine() or inside the setup function.
+setViewportAutoResize(false);
+```
+
+Use `onViewportResize()` to react to nominal viewport changes. It does not fire
+for zoom-only changes.
+
+### HUD border layout
+
+`HudLayout` provides viewport-relative top, bottom, left, right, and centre
+regions. Top/bottom regions are normally `Row`s and auto-size their height;
+left/right regions are normally `Column`s and auto-size their width; the centre
+receives the remainder. A free-form `LayoutContainer` region needs an explicit
+size for the dimension it should not auto-size.
+
+```typescript
+import { HudLayout } from "./lib/hud-layout";
+import { Row, Column, LayoutContainer } from "./lib/layout";
+
+const hud = new HudLayout();
+hud.setInset(12);
+hud.setRegionGap(8);
+
+const top = new Row(0, 0);
+top.setWrap(true);
+top.setGutter(8);
+hud.setTop(top);
+
+const left = new Column(0, 0);
+hud.setLeft(left);
+
+const centre = new LayoutContainer(0, 0);
+hud.setCenter(centre);
+centre.addChild(reticle); // centred at the centre region's origin
+centre.addChildAt(label, centre.x + 40, centre.y + 20); // free-form offset
+
+hud.layout();
+```
+
+`HudLayout.center` is a free-form `LayoutContainer` by default. To use standard
+layout in the centre, pass a `Row` or `Column` to `setCenter()`.
+
+Replacing or clearing a region hides the old region. Setting a region shows the
+newly attached region, so `setTop(null)` followed by `setTop(oldRow)` works.
+Removed regions can still be reused elsewhere after calling `setVisible(true)`.
+
+Destroying a `HudLayout` destroys its center and regions. Destroying the center
+while the HUD is alive creates a fresh default center.
+
+### Input transforms
+
+If the canvas is CSS-rotated or scaled by a host page, provide a pointer
+transform. It receives raw client CSS coordinates and must return canvas-local
+CSS coordinates in `0..canvas.clientWidth` × `0..canvas.clientHeight`:
+
+```typescript
+import { setInputTransform } from "./lib/simplegame";
+
+setInputTransform(({ x, y }) => {
+    return { x: x - canvasRect.left, y: y - canvasRect.top };
+});
+```
+
+Pass `null` to restore the default `getBoundingClientRect()` mapping.
 
 ---
 
@@ -1304,7 +1424,7 @@ panel.setVisible(true);
 | `visible` | `boolean` | `true` | Set directly or via `setVisible()` on containers. |
 | `opacity` | `number` | `1` | Opacity multiplier (0–1) for rendering. `1` = fully opaque (default — no performance cost; `globalAlpha` is not touched). `0` = fully invisible. Compounds with fade-in/out effects. |
 | `zIndex` | `number` | `0` | Draw order. Lower values draw first (behind), higher values draw on top. Same-index objects preserve insertion order. |
-| `hud` | `boolean` | `false` | When `true`, the object is positioned in canvas-pixel (screen) coordinates instead of board coordinates. It stays fixed on screen regardless of camera movement, zoom, or panning. HUD objects are drawn after all board objects and receive mouse input first. |
+| `hud` | `boolean` | `false` | When `true`, the object uses viewport-relative default-zoom coordinates instead of board coordinates. It stays fixed on screen regardless of camera movement, zoom, or panning. HUD status is inherited through `attachedTo`; effective-HUD objects are excluded from board collision. |
 
 ### Lifetime & boundaries
 
@@ -1545,10 +1665,45 @@ panel.setJustify(LayoutJustify.CENTER);      // group children vertically/horizo
 panel.setAlign(LayoutAlign.STRETCH);         // stretch children to fill cross-axis
 ```
 
+`Row` and `Column` can themselves be stretched or maximized by a parent layout
+container. Their interiors reflow to the assigned size, so a `Column` with
+`align = STRETCH` can produce full-width nested rows.
+
+When single-line content is larger than the container, justify falls back to
+`START` so overflow goes to the right/bottom instead of starting before the
+leading inner edge.
+
 ### Child positioning
 
 After `layout()` runs, each child's attach offset is updated so that moving the
 container repositions all children correctly.
+
+For free-form containers, use `addChildAt()` to place a child at an explicit
+position. Manual `setLocation()` calls also survive parent moves because
+`LayoutContainer.setLocation()` refreshes child offsets before moving.
+
+```typescript
+const panel = new LayoutContainer(500, 500);
+panel.addChildAt(label, 540, 520);
+```
+
+Move free-form containers with `setLocation()` or `move()`. Both propagate the
+movement through attached children. Directly assigning `container.x` / `y`
+bypasses that propagation and is not supported for free-form containers.
+
+### Layout ownership and destruction
+
+Layout containers own their attached children. Destroying a `LayoutContainer`,
+`HudLayout`, `Page`, or `ScrollablePage` destroys its layout children and
+regions. Destroying a layout child removes it from its parent's `children` and
+invalidates the parent, so no empty layout slot remains.
+
+Non-layout `GameObject`s detach attached children when destroyed rather than
+destroying them.
+
+`removeChild()` hides an effective-HUD child by default. Call `setVisible(true)`
+on it before reusing it in another container, or pass `{ keepVisible: true }` if
+you intentionally want it to remain visible at its detached position.
 
 ### API reference
 
@@ -1560,19 +1715,76 @@ container repositions all children correctly.
 | `gutter` | `number` | `0` | Space between children in board units. |
 | `borderWidth` | `number` | `0` | Border thickness. `0` = no border. |
 | `borderColor` | `string` | `"#000000"` | Border stroke colour. |
+| `explicitWidth` / `explicitHeight` | `number \| undefined` | `undefined` | Fixed dimensions. Unset dimensions auto-size from children. |
+| `maxWidth` | `number \| undefined` | `undefined` | Maximum width used when auto-sizing and wrapping. |
+| `layoutDirty` | `boolean` | `true` | Whether the container needs a reflow. |
 
 **`LayoutContainer` methods**
 
 | Method | Description |
 |--------|-------------|
-| `setPadding(n)` | Set padding and re-layout. |
-| `setGutter(n)` | Set gutter and re-layout. |
+| `setPadding(n)` | Set padding and invalidate layout. |
+| `setGutter(n)` | Set gutter and invalidate layout. |
 | `setBorder(width, color?)` | Set border width and optional colour. |
 | `setJustify(j)` | Set justify mode (`START`, `CENTER`, `END`, `SPACE_BETWEEN`, `SPACE_AROUND`). |
 | `setAlign(a)` | Set align mode (`START`, `CENTER`, `END`, `STRETCH`). |
-| `addChild(child)` | Add a child GameObject. |
-| `removeChild(child)` | Remove a child. |
-| `layout()` | Recalculate child positions. Called automatically by setters. |
+| `setSize(w, h)` | Set fixed width and height. |
+| `setWidth(w)` | Set fixed width; height auto-sizes. |
+| `setHeight(h)` | Set fixed height; width auto-sizes. |
+| `setAvailableWidth(w)` | Set an available width while preserving any explicit height. |
+| `setAvailableHeight(h)` | Set an available height while preserving any explicit width. |
+| `setMaxWidth(w)` | Limit auto-sized width; pass `null` to clear. |
+| `setAutoWidth()` / `setAutoHeight()` | Clear the corresponding explicit dimension. |
+| `setVisible(visible)` | Set visibility and invalidate parent layout. |
+| `addChild(child)` | Add a child at the container origin and invalidate layout. |
+| `addChildAt(child, x, y)` | Add a child at an explicit position and invalidate layout. |
+| `removeChild(child, { keepVisible? })` | Remove a child and invalidate layout. Effective-HUD children are hidden unless `keepVisible` is true. |
+| `invalidateLayout()` | Mark this container and its layout ancestors dirty. |
+| `layout()` | Recalculate child positions and clear the dirty flag. |
+
+Setters now invalidate rather than laying out immediately. The engine reflows
+dirty layout containers once before drawing, and again before `redraw()` while
+paused.
+
+`setWidth()` and `setHeight()` clear the other explicit dimension so it can
+auto-size. Use `setAvailableWidth()` / `setAvailableHeight()` when the other
+dimension is intentionally fixed.
+
+### Wrapping rows
+
+`Row` can wrap children onto multiple lines:
+
+```typescript
+const bar = new Row(500, 50);
+bar.setWidth(320);
+bar.setWrap(true);
+bar.setGutter(8);
+bar.setLineGap(8);
+bar.setJustify(LayoutJustify.END);
+bar.setAlign(LayoutAlign.CENTER);
+
+bar.addChild(label);
+bar.addChild(menuButton);
+bar.addChild(pauseButton);
+bar.layout();
+```
+
+- `wrap` defaults to `false`.
+- Hidden children are skipped by `Row` and `Column`.
+- A child wider than the available width goes on its own line and overflows.
+- `maximizeX`, `maximizeY`, and `LayoutAlign.STRETCH` are ignored when
+  `wrap = true`.
+- Measurement uses `getLayoutWidth()` / `getLayoutHeight()`, so `Text` contributes
+  its real measured size.
+- Nested layout containers receive bounded width and height from their parent.
+  A wrapping `Row` inside a fixed-width `Column` or HUD center wraps to that
+  width without a separate `setWidth()` call.
+- `maximizeX`, `maximizeY`, and `LayoutAlign.STRETCH` respect padding and
+  gutters.
+- Layout-assigned stretches and maximizes do not permanently freeze a child's
+  intrinsic size. A later external size change becomes the new baseline.
+- Use `setVisible(false)` to hide a child and invalidate layout. Directly
+  assigning `visible` still hides it but does not invalidate automatically.
 
 ### Page
 
@@ -1585,17 +1797,24 @@ page.setTopRow(headerPanel);
 page.setBottomRow(footerPanel);
 page.setLeftColumn(sidebar);
 page.setRightColumn(buttonPanel);
-page.setCenterColumn(mainContent);
+// centerColumn is created automatically and receives the remaining area.
+page.centerColumn.addChild(mainContent);
 ```
 
 | Member | Description |
 |--------|-------------|
-| `topRow` / `bottomRow` | `LayoutContainer` — top/bottom strips. |
-| `leftColumn` / `rightColumn` | `LayoutContainer` — left/right side panels. |
-| `centerColumn` | `LayoutContainer` — main content area. |
-| `setTopRow(row)` / `setBottomRow(row)` | Place a container in the top/bottom region. |
-| `setLeftColumn(col)` / `setRightColumn(col)` | Place a container in the left/right region. |
-| `setCenterColumn(col)` | Place a container in the center. |
+| `topRow` / `bottomRow` | `Row` — top/bottom strips. |
+| `leftColumn` / `rightColumn` | `Column` — left/right side panels. |
+| `centerColumn` | `Column` — main content area, created automatically. |
+| `setTopRow(row)` / `setBottomRow(row)` | Place a row in the top/bottom region. |
+| `setLeftColumn(col)` / `setRightColumn(col)` | Place a column in the left/right region. |
+
+`Page` participates in layout reflow. Region sizes are recalculated when a
+child changes size, such as a wrapping top row changing height.
+
+Region setters show newly attached regions and hide replaced regions. Destroying
+a page destroys its regions and center. Destroying `centerColumn` while the page
+is alive creates a fresh default center.
 
 ### ScrollablePage
 
@@ -1611,9 +1830,13 @@ scrollPage.scroll(50);              // scroll down 50px
 | Member | Description |
 |--------|-------------|
 | `scrollOffset` | Current scroll position in board units. |
+| `contentHeight` | Total scrollable content height. |
 | `scrollbar` | Optional `GameObject` used as a scrollbar indicator. |
-| `setContentHeight(height)` | Set the total scrollable content height. |
+| `setContentHeight(height)` | Set the total scrollable content height and invalidate layout. |
 | `scroll(delta)` | Scroll by `delta` board units, clamped to bounds. |
+
+`ScrollablePage` also supports top/bottom/left/right regions and participates in
+layout reflow.
 
 ---
 
@@ -1674,6 +1897,10 @@ import { createText, InlineImageDef } from "./lib/gameclasses";
 const label = createText("Hello World", { x: 100, y: 200 });
 label.size = 48;
 label.foreground = "#FF0000";
+
+// If the label is inside a layout container, use the setter so a
+// measurement-changing size update can invalidate layout:
+label.setSize(48);
 ```
 
 ### Highlight & shadow
@@ -1688,6 +1915,41 @@ label.setShadow("#000000", 4, 2, 2);           // black drop shadow, 4px blur, 2
 ```typescript
 label.setTextAlign("center");  // "left" (default), "center", "right"
 ```
+
+### Layout measurement and minimum sizes
+
+`Text` provides measured layout dimensions and can reserve a stable minimum size
+to prevent labels from jumping when digit counts change:
+
+```typescript
+const score = createText("9", { x: 500, y: 40 });
+score.setLayoutMinWidthSample("0000");  // reserve width for four digits
+score.setTextAlign("right");            // keep the right edge stable
+
+score.setText("10");                    // no reflow if it still fits
+score.setText("1000");                  // may grow beyond the sample
+```
+
+- `getLayoutWidth()` / `getLayoutHeight()` return measured sizes including
+  numeric and sample minimums.
+- Text height uses stable font metrics, raised to the tallest inline image.
+  Empty text still reserves a line height.
+- Layout containers place text using `getLayoutOffsetX()`, so left/centre/right
+  alignment respects the reserved box.
+- `setText()` / `setSize()` invalidate layout only when the effective size
+  changes.
+- Public `text` / `size` fields remain available. Direct assignment does not
+  invalidate layout; that is useful for batching:
+
+```typescript
+score.text = "100";
+lives.text = "3";
+timer.text = "01:23";
+hud.invalidateLayout();
+```
+
+Direct `textAlign` assignment has the same caveat; use `setTextAlign()` when
+changing alignment inside a layout container.
 
 ### Inline images
 
@@ -1720,7 +1982,17 @@ the defined width — no visual jump when the image loads.
 |---|---|
 | `size` | Font size in px (default 32). |
 | `foreground` | Text fill colour (default `"white"`). |
+| `layoutMinWidth` / `layoutMinHeight` | Numeric minimum layout size in layout units. |
+| `layoutMinWidthSample` / `layoutMinHeightSample` | Text samples whose measured size reserves a minimum. |
+| `getLayoutWidth()` / `getLayoutHeight()` | Effective measured layout size, including minimums. |
+| `getLayoutOffsetX()` / `getLayoutOffsetY()` | Offset from the draw origin to the layout centre. |
+| `setText(text, options?)` | Set text and conditionally invalidate layout. |
+| `setSize(size, options?)` | Set font size and conditionally invalidate layout. |
+| `setLayoutMinWidth(n)` / `setLayoutMinHeight(n)` | Set or clear numeric minimums. |
+| `setLayoutMinWidthSample(s)` / `setLayoutMinHeightSample(s)` | Set or clear sample-based minimums. |
 | `setHighlight(color, padding?)` | Enable highlight with given colour and optional padding around text (default 4). |
 | `setShadow(color, blur?, offsetX?, offsetY?)` | Enable drop shadow with given colour, blur radius (default 4), and offsets (default 2). |
 | `setTextAlign(align)` | `"left"` (default), `"center"`, or `"right"`. |
-| `setInlineImages(images)` | Provide `InlineImageMap` for `{img:name}` syntax. |
+| `setInlineImages(images, options?)` | Provide `InlineImageMap` for `{img:name}` syntax. |
+
+Layout invalidation options are `"auto"` (default), `"always"`, or `"never"`.
