@@ -1,5 +1,15 @@
 import { gameObjects, enemies, collisionActions, CollisionAction, boardWidth, boardHeight, players, projectiles, items } from "./simplegame";
 import { dotProduct, type Position2D, type vec2 } from "./util";
+import { TextEffectState, drawTextRunWithEffects, resolveTextEffects, type TextLabelEffectOptions } from "./text-effects";
+
+export type {
+    TextEffectOptions,
+    TextLabelEffectOptions,
+    TextShadowOptions,
+    TextOutlineOptions,
+    TextGlowOptions,
+    TextBackgroundOptions,
+} from "./text-effects";
 
 /**
  * Options for circular/orbital movement via GameObject.circleAround().
@@ -2169,12 +2179,6 @@ export class Text extends GameObject {
     text : string;
     size : number = 32;
     foreground : string = "white";
-    highlightColor?: string;
-    highlightPadding: number = 4;
-    shadowColor?: string;
-    shadowBlur: number = 4;
-    shadowOffsetX: number = 2;
-    shadowOffsetY: number = 2;
     textAlign: CanvasTextAlign = "left";
     inlineImages?: InlineImageMap;
 
@@ -2193,6 +2197,80 @@ export class Text extends GameObject {
         measurement: TextMeasurement;
     };
 
+    private readonly textEffectState = new TextEffectState();
+
+    /**
+     * @deprecated Use `setTextEffects({ background: { color } })` or
+     * `setHighlight()` instead.
+     */
+    get highlightColor(): string | undefined {
+        return this.textEffectState.getBackgroundColor();
+    }
+
+    set highlightColor(color: string | undefined) {
+        this.textEffectState.setBackgroundColor(color);
+    }
+
+    /**
+     * @deprecated Use `setTextEffects({ background: { padding } })` or
+     * `setHighlight()` instead.
+     */
+    get highlightPadding(): number {
+        return this.textEffectState.getBackgroundPadding();
+    }
+
+    set highlightPadding(padding: number) {
+        this.textEffectState.setBackgroundPadding(padding);
+    }
+
+    /**
+     * @deprecated Use `setTextEffects({ shadow: { color } })` or
+     * `setShadow()` instead.
+     */
+    get shadowColor(): string | undefined {
+        return this.textEffectState.getShadowColor();
+    }
+
+    set shadowColor(color: string | undefined) {
+        this.textEffectState.setShadowColor(color);
+    }
+
+    /**
+     * @deprecated Use `setTextEffects({ shadow: { blur } })` or
+     * `setShadow()` instead.
+     */
+    get shadowBlur(): number {
+        return this.textEffectState.getShadowBlur();
+    }
+
+    set shadowBlur(blur: number) {
+        this.textEffectState.setShadowBlur(blur);
+    }
+
+    /**
+     * @deprecated Use `setTextEffects({ shadow: { offsetX } })` or
+     * `setShadow()` instead.
+     */
+    get shadowOffsetX(): number {
+        return this.textEffectState.getShadowOffsetX();
+    }
+
+    set shadowOffsetX(offsetX: number) {
+        this.textEffectState.setShadowOffsetX(offsetX);
+    }
+
+    /**
+     * @deprecated Use `setTextEffects({ shadow: { offsetY } })` or
+     * `setShadow()` instead.
+     */
+    get shadowOffsetY(): number {
+        return this.textEffectState.getShadowOffsetY();
+    }
+
+    set shadowOffsetY(offsetY: number) {
+        this.textEffectState.setShadowOffsetY(offsetY);
+    }
+
 
     constructor(gameclass : TextClass, text:string, x : number, y : number, inlineImages?: InlineImageMap) {
         super(gameclass, x, y);
@@ -2202,16 +2280,50 @@ export class Text extends GameObject {
         }
     }
 
-    setHighlight(color: string, padding?: number): void {
-        this.highlightColor = color;
-        if (padding != null) this.highlightPadding = padding;
+    /**
+     * Replaces all text effects.
+     *
+     * Effects are paint-only and do not invalidate layout or change measured
+     * text dimensions.
+     *
+     * @param options - New effect configuration; omit to clear all effects
+     */
+    setTextEffects(options?: TextLabelEffectOptions): void {
+        this.textEffectState.setOptions(options);
     }
 
+    /**
+     * Clears all text effects, including the legacy highlight background.
+     */
+    clearTextEffects(): void {
+        this.textEffectState.clear();
+    }
+
+    /**
+     * Enables a rectangular background behind each text segment.
+     *
+     * Compatibility alias for `setTextEffects({ background: { color, padding } })`.
+     *
+     * @param color - Background color
+     * @param padding - Optional padding around text segments
+     */
+    setHighlight(color: string, padding?: number): void {
+        this.textEffectState.setBackgroundLegacy(color, padding);
+    }
+
+    /**
+     * Enables a drop shadow.
+     *
+     * Compatibility alias for
+     * `setTextEffects({ shadow: { color, blur, offsetX, offsetY } })`.
+     *
+     * @param color - Shadow color
+     * @param blur - Optional blur radius
+     * @param offsetX - Optional horizontal offset
+     * @param offsetY - Optional vertical offset
+     */
     setShadow(color: string, blur?: number, offsetX?: number, offsetY?: number): void {
-        this.shadowColor = color;
-        if (blur != null) this.shadowBlur = blur;
-        if (offsetX != null) this.shadowOffsetX = offsetX;
-        if (offsetY != null) this.shadowOffsetY = offsetY;
+        this.textEffectState.setShadowLegacy(color, blur, offsetX, offsetY);
     }
 
     setTextAlign(align: CanvasTextAlign): void {
@@ -2476,6 +2588,11 @@ export class Text extends GameObject {
         const measurement = this.measureTextLayout();
         const segments = measurement.segments;
         const totalWidth = measurement.width;
+        const paint = resolveTextEffects(
+            ctx,
+            this.foreground,
+            this.textEffectState.getOptions()
+        );
 
         let xCursor = 0;
         if (this.textAlign === "center") xCursor = -totalWidth / 2;
@@ -2483,34 +2600,26 @@ export class Text extends GameObject {
 
         for (const seg of segments) {
             if (seg.type === "text") {
-                if (this.highlightColor) {
-                    ctx.fillStyle = this.highlightColor;
-                    const hx = xCursor - seg.left - this.highlightPadding;
-                    const hy = -seg.ascent - this.highlightPadding;
+                if (paint.background) {
+                    ctx.fillStyle = paint.background.color;
+                    const hx = xCursor - seg.left - paint.background.padding;
+                    const hy = -seg.ascent - paint.background.padding;
                     ctx.fillRect(
                         hx,
                         hy,
-                        seg.width + this.highlightPadding * 2,
-                        seg.ascent + seg.descent + this.highlightPadding * 2
+                        seg.width + paint.background.padding * 2,
+                        seg.ascent + seg.descent + paint.background.padding * 2
                     );
                 }
 
-                if (this.shadowColor) {
-                    ctx.shadowColor = this.shadowColor;
-                    ctx.shadowBlur = this.shadowBlur;
-                    ctx.shadowOffsetX = this.shadowOffsetX;
-                    ctx.shadowOffsetY = this.shadowOffsetY;
-                }
-
-                ctx.fillStyle = this.foreground;
-                ctx.fillText(seg.value, xCursor, 0);
-
-                if (this.shadowColor) {
-                    ctx.shadowColor = "transparent";
-                    ctx.shadowBlur = 0;
-                    ctx.shadowOffsetX = 0;
-                    ctx.shadowOffsetY = 0;
-                }
+                drawTextRunWithEffects(
+                    ctx,
+                    seg.value,
+                    xCursor,
+                    0,
+                    this.foreground,
+                    paint
+                );
 
                 xCursor += seg.width;
 

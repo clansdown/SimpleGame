@@ -1,5 +1,6 @@
 import { GameObject, GameObjectClass, type LayoutInvalidationOptions } from "./gameclasses";
 import { getMousePosition, buttonDebugLevel } from "./simplegame";
+import { TextEffectState, drawTextRunWithEffects, resolveTextEffects, type TextEffectOptions } from "./text-effects";
 import type { Position2D } from "./util";
 
 const TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -81,6 +82,8 @@ export class Button extends GameObject {
     isClicked: boolean = false;
     disabled: boolean = false;
     onClickCallback?: () => void;
+
+    private readonly textEffectState = new TextEffectState();
 
     /** Tooltip object — caller-supplied GameObject shown on hover/hold */
     tooltip: GameObject | null = null;
@@ -294,6 +297,23 @@ export class Button extends GameObject {
         this.foregroundColor = color;
     }
 
+    /**
+     * Replaces all button-label text effects.
+     *
+     * Effects are paint-only and do not change button dimensions, auto-sizing,
+     * hitboxes, or tooltip placement.
+     *
+     * @param options - New effect configuration; omit to clear all effects
+     */
+    setTextEffects(options?: TextEffectOptions): void {
+        this.textEffectState.setBaseOptions(options);
+    }
+
+    /** Clears all button-label text effects. */
+    clearTextEffects(): void {
+        this.textEffectState.clear();
+    }
+
     /** Sets the background opacity (0–1). */
     setBackgroundOpacity(opacity: number): void {
         if (buttonDebugLevel >= 1) console.log(`[ButtonDebug] "${this.text}": setBackgroundOpacity(${opacity})`);
@@ -481,10 +501,14 @@ export class Button extends GameObject {
         }
 
         // --- Icon + text layer ---
-        ctx.fillStyle = this.foregroundColor;
         ctx.font = "16px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
+        const textEffectPaint = resolveTextEffects(
+            ctx,
+            this.foregroundColor,
+            this.textEffectState.getOptions()
+        );
 
         const iconConfigured = this.icon !== undefined;
 
@@ -544,7 +568,14 @@ export class Button extends GameObject {
 
         // Draw text
         if (this.text) {
-            ctx.fillText(this.text, textX, textY);
+            drawTextRunWithEffects(
+                ctx,
+                this.text,
+                textX,
+                textY,
+                this.foregroundColor,
+                textEffectPaint
+            );
         }
 
         // --- Gray overlay when disabled ---

@@ -397,6 +397,8 @@ nulled or disposed.
 | `IconLayout` | `"left" \| "right" \| "above" \| "below"` — icon position relative to text. |
 | `ButtonOptions` | Optional config object for `ButtonClass.spawn()`: `width`, `height`, `backgroundImage`, `color`, `iconWidth`, `iconHeight`, `iconPadding`, `iconLayout`, `backgroundOpacity`, `cornerRadius`, `foregroundColor`. |
 | `ToggleButtonOptions` | Extends `ButtonOptions`. Adds: `toggled`, `onColor`, `offColor`, `onForegroundColor`, `offForegroundColor`, `onText`, `offText`, `onIcon`, `offIcon`, `onBorderHighlight`, `onBorderHighlightColor`. |
+| `TextEffectOptions` | Optional post-construction effect configuration for `Text` and `Button`: `shadow`, `outline`, `glow`. See [Text effects](#text-effects). |
+| `TextLabelEffectOptions` | Extends `TextEffectOptions` with `background`, used by `Text` for the legacy highlight alias. |
 | `LayoutContainer` | Base class for `Row`, `Column`, and `HudLayout`. Provides `padding`, `gutter`, `borderWidth`/`borderColor`, `setJustify()`, `setAlign()`, `setWidth()`/`setHeight()`, `invalidateLayout()`, `addChild()`/`removeChild()`, `layout()`. |
 | `LayoutJustify` | Enum: `START`, `CENTER`, `END`, `SPACE_BETWEEN`, `SPACE_AROUND`. |
 | `LayoutAlign` | Enum: `START`, `CENTER`, `END`, `STRETCH`. |
@@ -484,6 +486,54 @@ When you provide `width` or `height` in `ButtonOptions`, it overrides that
 dimension (the other still auto-computes). Useful for uniform-width buttons.
 
 The button will never shrink below 40×30 pixels.
+
+### Button text effects
+
+Button labels support optional shadow, outline, and glow effects. Configure them
+after construction; effects are paint-only and do not change button dimensions,
+auto-sizing, hitboxes, or tooltip placement:
+
+```typescript
+import type { TextEffectOptions } from "./lib/gameclasses";
+
+button.setTextEffects({
+    shadow: {
+        color: "#000000",
+        offsetX: 2,
+        offsetY: 2,
+        blur: 4,
+        opacity: 1,
+    },
+    outline: {
+        color: "#FFFFFF",
+        width: 2,
+        opacity: 1,
+        lineJoin: "round",
+    },
+});
+```
+
+Omitted colors are derived from the current label color. Dark text gets a light
+contrast color; light text gets a dark one. Explicit colors always win:
+
+```typescript
+// Black text: derived light shadow is suitable for dark/transparent areas.
+button.setForegroundColor("#000000");
+button.setTextEffects({
+    shadow: { offsetX: 2, offsetY: 2, blur: 4 },
+});
+
+// Glow is a zero-offset shadow. It wins if both glow and shadow are set.
+button.setTextEffects({
+    glow: { color: "#FFFFFF", blur: 6 },
+});
+```
+
+Outline effects cast the shadow/glow; the text fill is drawn on top without a
+second shadow. Call `clearTextEffects()` to remove all effects.
+
+Button background plates are not part of this effect API yet, and
+`Button.setTextEffects()` does not accept the Text-only `background` option.
 
 ### Background opacity
 
@@ -597,6 +647,8 @@ The `isHovered` boolean is updated every frame for all game objects.
 | `setIconLayout(layout)` | `"left"` \| `"right"` \| `"above"` (default) \| `"below"`. |
 | `setBackgroundColor(color)` | Change background colour and re-derive hover/click variants. |
 | `setForegroundColor(color)` | Change text colour. |
+| `setTextEffects(options?)` | Replace all label effects with `TextEffectOptions`; omit to clear. Paint-only. |
+| `clearTextEffects()` | Remove all label effects. |
 | `setBackgroundOpacity(opacity)` | Background opacity 0–1. |
 | `setCornerRadius(radius)` | Corner rounding in game units. `0` = square (default). |
 | `setTooltip(obj)` | Assign any `GameObject` as the tooltip (or `null` to remove). |
@@ -1885,8 +1937,8 @@ base `GameObject` — see [Fade-in / Fade-out](#fade-in--fade-out).
 
 ## Text
 
-The `Text` class renders text with optional highlight, drop shadow, alignment,
-and inline images.
+The `Text` class renders text with optional shadow, outline, glow, background,
+alignment, and inline images.
 
 ### Creating text
 
@@ -1903,12 +1955,95 @@ label.foreground = "#FF0000";
 label.setSize(48);
 ```
 
-### Highlight & shadow
+### Text effects
+
+Configure all text effects with a single post-construction options object:
 
 ```typescript
-label.setHighlight("#FFFF00", 6);             // yellow highlight, 6px padding
-label.setShadow("#000000", 4, 2, 2);           // black drop shadow, 4px blur, 2px offset
+import type { TextLabelEffectOptions } from "./lib/gameclasses";
+
+label.setTextEffects({
+    shadow: {
+        // color omitted: auto contrast from the current foreground
+        offsetX: 2,
+        offsetY: 2,
+        blur: 4,
+        opacity: 1,
+    },
+    outline: {
+        color: "#FFFFFF",
+        width: 2,
+        opacity: 1,
+        lineJoin: "round",
+    },
+    background: {
+        color: "#FFFF00",
+        padding: 6,
+    },
+});
 ```
+
+`setTextEffects()` replaces the entire effect configuration. Calling it with no
+arguments or `{}` clears all effects, including the background:
+
+```typescript
+label.clearTextEffects();
+```
+
+Effects are paint-only. They do not affect measurement, layout, or `Text` sizes.
+
+#### Shadow, outline, and glow
+
+- **Shadow** uses the native Canvas shadow with configurable color, offsets,
+  blur, and opacity.
+- **Outline** draws a stroke behind the fill. When an outline is present, the
+  outline casts the shadow/glow and the fill does not cast a second shadow.
+- **Glow** is a zero-offset shadow. If both `glow` and `shadow` are configured,
+  glow wins.
+
+Defaults:
+
+| Effect | Defaults |
+|---|---|
+| Shadow | offset `2, 2`, blur `4`, opacity `1`, color auto |
+| Outline | width `2`, opacity `1`, `lineJoin: "round"`, color auto |
+| Glow | blur `6`, opacity `1`, color auto |
+| Background | padding `4`, color required |
+
+When an effect color is omitted, a best-effort contrast color is derived from
+the current `foreground` at draw time. Dark text gets a light effect color;
+light text gets a dark one. Set an explicit color when appearance matters:
+
+```typescript
+label.foreground = "#000000";
+label.setTextEffects({
+    shadow: { color: "#FFFFFF", offsetX: 2, offsetY: 2, blur: 0 },
+});
+```
+
+Glow example:
+
+```typescript
+label.setTextEffects({
+    glow: { color: "#FFFFFF", blur: 6 },
+});
+```
+
+Inline images are not affected by text effects.
+
+#### Legacy aliases
+
+`setShadow()` and `setHighlight()` remain supported as aliases that patch their
+individual effect while preserving the others:
+
+```typescript
+label.setHighlight("#FFFF00", 6);   // background effect
+label.setShadow("#000000", 4, 2, 2); // shadow effect
+```
+
+The effect-specific fields `highlightColor`, `highlightPadding`, `shadowColor`,
+`shadowBlur`, `shadowOffsetX`, and `shadowOffsetY` are deprecated. Use
+`setTextEffects()` or the named aliases instead.
 
 ### Alignment
 
@@ -1990,8 +2125,10 @@ the defined width — no visual jump when the image loads.
 | `setSize(size, options?)` | Set font size and conditionally invalidate layout. |
 | `setLayoutMinWidth(n)` / `setLayoutMinHeight(n)` | Set or clear numeric minimums. |
 | `setLayoutMinWidthSample(s)` / `setLayoutMinHeightSample(s)` | Set or clear sample-based minimums. |
-| `setHighlight(color, padding?)` | Enable highlight with given colour and optional padding around text (default 4). |
-| `setShadow(color, blur?, offsetX?, offsetY?)` | Enable drop shadow with given colour, blur radius (default 4), and offsets (default 2). |
+| `setTextEffects(options?)` | Replace all effects with `TextLabelEffectOptions`; omit to clear. Paint-only. |
+| `clearTextEffects()` | Remove all effects, including background. |
+| `setHighlight(color, padding?)` | Legacy alias for the background effect. |
+| `setShadow(color, blur?, offsetX?, offsetY?)` | Legacy alias for the shadow effect. |
 | `setTextAlign(align)` | `"left"` (default), `"center"`, or `"right"`. |
 | `setInlineImages(images, options?)` | Provide `InlineImageMap` for `{img:name}` syntax. |
 
